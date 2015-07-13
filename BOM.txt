@@ -1,0 +1,22 @@
+BOM
+
+The following components were bought and currently assembled on a proto board
+
+Adafruit 
+
+1 x Teensy 3.1 + header[ID:1625] = $19.95
+1 x Adafruit 10-DOF IMU Breakout - L3GD20H + LSM303 + BMP180[ID:1604] = $29.95
+1 x Adafruit Mono 2.5W Class D Audio Amplifier - PAM8302[ID:2130] = $3.95
+1 x Mini Metal Speaker w/ Wires - 8 ohm 0.5W[ID:1890] = $3.00
+1 x Automotive Gauge Stepper Motor (x27.168) [ID:2424] = $9.95
+1 x Adafruit TB6612 1.2A DC/Stepper Motor Driver Breakout Board[ID:2448] = $4.95
+
+modern device -  Pressure Sensor (MPXV) (#MD0590) (honeywell MPXV7007DP) 14$
+
+2 x 10K resistors (for MPXV7007DP voltage divider) - should be 1% or better.
+
+1 x LS20031 gps module
+
+Notes:
+currently the code does not use the gps, the diff pressure module and imu. Hence, a simpler BMP180 breakout board can be used and the gps and diff pressure modules can be dropped.
+ 
