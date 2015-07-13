@@ -30,8 +30,8 @@ const float ddsAcc_limit = dT * 2;
 const float sound_threshold = ddsAcc_limit / 2;
 
 // in m/sec (or something - the time unit is less certain here!
-const float neg_dead_band = -0.2F;
-const float pos_dead_band = 0.2F;
+const float neg_dead_band = -0.3F;
+const float pos_dead_band = 0.3F;
 
 float H[N_samples];
 float sample_times[N_samples];
@@ -88,6 +88,34 @@ void simpLinReg(float* x, float* y, float* lrCoef, int n){
     lrCoef[1]=ybar-lrCoef[0]*xbar;
 }
 
+//lowpass filter bessel, 2nd order, corner = 0.04 (normalized - 1Hz with a 25Hz sampling), as calculated using http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=be&passmode=lp&order=2&usesr=usesr&sr=25&frequencyLow=1&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
+
+class filter
+{
+	public:
+		filter()
+		{
+			v[0]=0.0;
+			v[1]=0.0;
+		}
+	private:
+		float v[3];
+	public:
+		float step(float x) //class II 
+		{
+			v[0] = v[1];
+			v[1] = v[2];
+			v[2] = (1.980014076209e-2 * x)
+				 + ( -0.5731643146 * v[0])
+				 + (  1.4939637515 * v[1]);
+			return 
+				 (v[0] + v[2])
+				+2 * v[1];
+		}
+};
+
+filter lowpass;
+
 void setup()
 {
     int i;
@@ -126,7 +154,7 @@ void loop()
 {
     int i;
     long since_last_copy;
-    float climb_rate;
+    float climb_rate, climb_rate_filter;
 
     if (grab_data) {
 	noInterrupts();
@@ -142,9 +170,17 @@ void loop()
 	// KLUDGE - i should probably allocate mem properly etc
 	simpLinReg(&(delta_times[0]), &(H[0]), &(lrCoef[0]), N_samples);
 	
-	climb_rate = lrCoef[0] * 1000; // in m/sec
+	// NOTE : the filter here is for a fixed 25Hz sampling rate!
+	if (counter > 0)
+	    climb_rate_filter = lowpass.step(H[counter % N_samples] - H[(counter-1) % N_samples]);
+	else // KLUDGE
+	    climb_rate_filter = lowpass.step(H[0] - H[N_samples-1]);
+	
+	//climb_rate = lrCoef[0] * 1000; // in m/sec
+	climb_rate = climb_rate_filter;
+	
 	// TODO: need to deal with residual, otherwise the needle drifts (since it's not wite noise)
-	stepper.step(-int(climb_rate/ 10));
+	stepper.step(-int(climb_rate/ 1));
 
 	// NOTE: can do non linear function here, e.g. logarithmic
 	toneFreq = constrain(climb_rate * 4, -500, 500);
@@ -168,13 +204,16 @@ void loop()
 	Serial.print(", Alt= ");
 	Serial.print(H[counter % N_samples]);
 	Serial.print("m , lrCoef: ");
-	Serial.print(climb_rate);
+	Serial.print(lrCoef[0] * 1000);
 	Serial.print(" m/sec,");
 	Serial.print(lrCoef[1]);
 	Serial.print(" m, f= ");
 	Serial.print(toneFreq + 510);
 	Serial.print(", ddsAcc = ");
-	Serial.println(ddsAcc);
+	Serial.print(ddsAcc);
+	Serial.print(", climb_rate_filter = ");
+	Serial.print(climb_rate_filter);
+	Serial.println(" m/s");
 	
 	// using the linear regression instead of my stupidity
 	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
