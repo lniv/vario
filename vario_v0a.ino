@@ -14,12 +14,14 @@
 
 // change this to the number of steps on your motor
 #define STEPS 100
-    
 // create an instance of the stepper class, specifying
 // the number of steps of the motor and the pins it's
 // attached to
 Stepper stepper(STEPS, 4, 5, 6, 7);
     
+// how many steps per m/sec of climb rate (or something - units are still uncertain at this point in time. assuming we want a 20kt range (+-10kt) = 10m/sec range over 600 steps -> 1m/sec is 60 steps
+#define STEP_MULT 60.0 // 
+
 // i'm going to do the filtering not so nicely, by just implementing a ring buffer, storing deltas and going from there. Since bmp180 seems to get about 30Hz, and i'd like at most 0.5sec, we'll start with 20 samples.
 // we should at least use a non square window, TODO
 #define N_samples 75 // 25sampls/sec and a 1.5sec time constant : 37.5 samples x 2  = 75
@@ -30,8 +32,8 @@ const float ddsAcc_limit = dT * 2;
 const float sound_threshold = ddsAcc_limit / 2;
 
 // in m/sec (or something - the time unit is less certain here!
-const float neg_dead_band = -0.3F;
-const float pos_dead_band = 0.3F;
+const float neg_dead_band = -0.15F;
+const float pos_dead_band = 0.15F;
 
 float H[N_samples];
 float sample_times[N_samples];
@@ -56,9 +58,11 @@ void time_isr(void) {
 
 unsigned long time = 0, last_time = 0;
 
-float toneFreq, pressure, altitude, old_altitude ;
+float toneFreq, pressure, altitude, old_altitude;
 
-short ddsAcc; // int is 4 bytes on the later arduino and teensy!
+float ddsAcc; // int is 4 bytes on the later arduino and teensy!
+
+short position, old_position;
 
 // borrowed from http://jwbrooks.blogspot.com/2014/02/arduino-linear-regression-function.html
 void simpLinReg(float* x, float* y, float* lrCoef, int n){
@@ -88,31 +92,67 @@ void simpLinReg(float* x, float* y, float* lrCoef, int n){
     lrCoef[1]=ybar-lrCoef[0]*xbar;
 }
 
+/*
 //lowpass filter bessel, 2nd order, corner = 0.04 (normalized - 1Hz with a 25Hz sampling), as calculated using http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=be&passmode=lp&order=2&usesr=usesr&sr=25&frequencyLow=1&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
+// replaced with http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=be&passmode=lp&order=5&usesr=usesr&sr=25&frequencyLow=0.6&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
 
+
+//Low pass bessel filter order=5 alpha1=0.024 
+class filter
+{
+	public:
+		filter()
+		{
+			for(int i=0; i <= 5; i++)
+				v[i]=0.0;
+		}
+	private:
+		float v[6];
+	public:
+		float step(float x) //class II 
+		{
+			v[0] = v[1];
+			v[1] = v[2];
+			v[2] = v[3];
+			v[3] = v[4];
+			v[4] = v[5];
+			v[5] = (1.743482055851e-5 * x)
+				 + (  0.3938443413 * v[0])
+				 + ( -2.3459351909 * v[1])
+				 + (  5.6191364702 * v[2])
+				 + ( -6.7677177341 * v[3])
+				 + (  4.1001141993 * v[4]);
+			return 
+				 (v[0] + v[5])
+				+5 * (v[1] + v[4])
+				+10 * (v[2] + v[3]);
+		}
+};*/
+
+
+// http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=be&passmode=lp&order=1&usesr=usesr&sr=25&frequencyLow=0.6&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
+//Low pass bessel filter order=1 alpha1=0.024 
 class filter
 {
 	public:
 		filter()
 		{
 			v[0]=0.0;
-			v[1]=0.0;
 		}
 	private:
-		float v[3];
+		float v[2];
 	public:
 		float step(float x) //class II 
 		{
 			v[0] = v[1];
-			v[1] = v[2];
-			v[2] = (1.980014076209e-2 * x)
-				 + ( -0.5731643146 * v[0])
-				 + (  1.4939637515 * v[1]);
+			v[1] = (7.023571980621e-2 * x)
+				 + (  0.8595285604 * v[0]);
 			return 
-				 (v[0] + v[2])
-				+2 * v[1];
+				 (v[0] + v[1]);
 		}
 };
+
+
 
 filter lowpass;
 
@@ -123,7 +163,7 @@ void setup()
     if(!bmp.begin())
     {
 	/* There was a problem detecting the BMP085 ... check your connections */
-	Serial.print("Ooops, no BMP085 detected ... Check your wiring or I2C ADDR!");
+	Serial.print("Ooops, no BMP180 detected ... Check your wiring or I2C ADDR!");
 	while(1);
     }
     Serial.begin(115200); // note that number i BS for teensy.
@@ -137,11 +177,12 @@ void setup()
 	sample_times[i] = 0.0;
     }
     
-    stepper.setSpeed(60);
+    stepper.setSpeed(300);
     // try to get it to center
     // uncomment this if necessary to set - but it does bang the motor against the stop!
-//     stepper.step(-600);
-//     stepper.step(300);
+    stepper.step(-600);
+    stepper.step(300);
+    old_position = position = 300;
     
     Timer1.initialize(dT * 1000);
     Timer1.attachInterrupt(time_isr);
@@ -171,25 +212,28 @@ void loop()
 	simpLinReg(&(delta_times[0]), &(H[0]), &(lrCoef[0]), N_samples);
 	
 	// NOTE : the filter here is for a fixed 25Hz sampling rate!
+	// FIXME - should be 25, but seems a mess
 	if (counter > 0)
-	    climb_rate_filter = lowpass.step(H[counter % N_samples] - H[(counter-1) % N_samples]);
+	    climb_rate_filter =  lowpass.step(H[counter % N_samples] - H[(counter-1) % N_samples]);
 	else // KLUDGE
-	    climb_rate_filter = lowpass.step(H[0] - H[N_samples-1]);
+	    climb_rate_filter =  lowpass.step(H[0] - H[N_samples-1]);
 	
 	//climb_rate = lrCoef[0] * 1000; // in m/sec
 	climb_rate = climb_rate_filter;
 	
-	// TODO: need to deal with residual, otherwise the needle drifts (since it's not wite noise)
-	stepper.step(-int(climb_rate/ 1));
+	old_position = position;
+	position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
+	stepper.step(position - old_position);
 
 	// NOTE: can do non linear function here, e.g. logarithmic
-	toneFreq = constrain(climb_rate * 4, -500, 500);
+	// scaled so 5/msec is full range
+	toneFreq = constrain(climb_rate * 100, -500, 500);
 	
 	// copied from my mkiv audio code
 	if (toneFreq > 0)
 	    toneFreq += 150 ; 
 
-	ddsAcc += int(climb_rate);
+	ddsAcc += climb_rate * 100.0;
 	if (ddsAcc > ddsAcc_limit) 
 	    ddsAcc = 0;
 	if (ddsAcc < 0)
@@ -213,10 +257,14 @@ void loop()
 	Serial.print(ddsAcc);
 	Serial.print(", climb_rate_filter = ");
 	Serial.print(climb_rate_filter);
-	Serial.println(" m/s");
+	Serial.print(", positions = ");
+	Serial.print(position);
+	Serial.print(",");
+	Serial.println(old_position);
 	
 	// using the linear regression instead of my stupidity
-	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
+	//if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
+	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && counter % 12 > 6))
 	    tone(speaker_PIN, toneFreq + 510);
 	else
 	    noTone(speaker_PIN);
