@@ -9,6 +9,7 @@
 #include <Adafruit_BMP085_U.h>
 #include <Stepper.h>
 #include <TimerOne.h>
+#include <TinyGPS.h>
 
 #define speaker_PIN 10
 
@@ -47,6 +48,10 @@ long since_last;
 elapsedMillis t = 0;
 
 Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(BMP085_MODE_ULTRAHIGHRES);
+
+TinyGPS gps;
+#define Uart Serial1
+
 
 void time_isr(void) {
     since_last = long(t);
@@ -187,6 +192,8 @@ void setup()
     Timer1.initialize(dT * 1000);
     Timer1.attachInterrupt(time_isr);
     
+    Uart.begin(57600);
+    
     Serial.println("start");
 }
 
@@ -197,6 +204,17 @@ void loop()
     long since_last_copy;
     float climb_rate, climb_rate_filter;
 
+    if (Uart.available()) {
+	char c = Uart.read();
+// 	    Serial.print(c);  // uncomment to see raw GPS data
+	if (gps.encode(c)) {
+	    long lat, lon;
+	    unsigned long age;
+	    gps.get_position(&lat, &lon, &age);
+	    Serial.print("Lat/Long(10^-5 deg): "); Serial.print(lat); Serial.print(", "); Serial.print(lon); 
+	    Serial.print(" Fix age: "); Serial.print(age); Serial.println("ms.");
+	}
+    }
     if (grab_data) {
 	noInterrupts();
 	since_last_copy = since_last;
