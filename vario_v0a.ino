@@ -101,67 +101,39 @@ void simpLinReg(float* x, float* y, float* lrCoef, int n){
     lrCoef[1]=ybar-lrCoef[0]*xbar;
 }
 
-/*
-//lowpass filter bessel, 2nd order, corner = 0.04 (normalized - 1Hz with a 25Hz sampling), as calculated using http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=be&passmode=lp&order=2&usesr=usesr&sr=25&frequencyLow=1&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
-// replaced with http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=be&passmode=lp&order=5&usesr=usesr&sr=25&frequencyLow=0.6&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
+// from b, a = signal.iirfilter(4, f0/f, btype = 'lowpass', ftype = 'butterworth')
+double b[5] = {1.32937289e-05,   5.31749156e-05,   7.97623734e-05, 5.31749156e-05,   1.32937289e-05};
+double a[5] = {1.        , -3.67172909,  5.06799839, -3.11596693,  0.71991033};
 
-
-//Low pass bessel filter order=5 alpha1=0.024 
-class filter
-{
+class filter {
 	public:
-		filter()
-		{
-			for(int i=0; i <= 5; i++)
-				v[i]=0.0;
+		filter() {
+		    for (int i=0; i < 5; i++) {
+			x[i] = 0.0;
+			y[i] = 0.0;
+		    }
 		}
 	private:
-		float v[6];
+		double x[5], y[5];
 	public:
-		float step(float x) //class II 
+		double step(double new_val) 
 		{
-			v[0] = v[1];
-			v[1] = v[2];
-			v[2] = v[3];
-			v[3] = v[4];
-			v[4] = v[5];
-			v[5] = (1.743482055851e-5 * x)
-				 + (  0.3938443413 * v[0])
-				 + ( -2.3459351909 * v[1])
-				 + (  5.6191364702 * v[2])
-				 + ( -6.7677177341 * v[3])
-				 + (  4.1001141993 * v[4]);
-			return 
-				 (v[0] + v[5])
-				+5 * (v[1] + v[4])
-				+10 * (v[2] + v[3]);
-		}
-};*/
-
-
-// http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=be&passmode=lp&order=1&usesr=usesr&sr=25&frequencyLow=0.6&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
-//Low pass bessel filter order=1 alpha1=0.024 
-class filter
-{
-	public:
-		filter()
-		{
-			v[0]=0.0;
-		}
-	private:
-		float v[2];
-	public:
-		float step(float x) //class II 
-		{
-			v[0] = v[1];
-			v[1] = (7.023571980621e-2 * x)
-				 + (  0.8595285604 * v[0]);
-			return 
-				 (v[0] + v[1]);
+		    int i;
+		    for (i=0; i< 4; i++) { 
+			x[i] = x[i+1];
+			y[i] = y[i+1];
+		    }
+		    x[4] = new_val;
+		    y[4]  = 0.0;
+		    for (i=0; i< 5 ; i++)
+			y[4] += b[i] * x[4-i];
+		    for (i=1; i < 5; i++)
+			y[4] -= a[i] * y[4-i];
+		    //y[4] = y[4] / a[0]; // not needed since a[0] =1.0;
+			return y[4];
 		}
 };
-
-
+    
 
 filter lowpass;
 
