@@ -2,6 +2,9 @@
 // Copyright Niv Levy July 11th 2015 and later
 // released under GPL v2
 
+
+// TODO implement the openvario protocol - follow https://github.com/Turbo87/openvario-protocol
+
 // originally based on http://www.rcgroups.com/forums/showthread.php?t=1749208  ( Rolf R Bakke, Oct 2012), but zero remains.
 
 #include <Wire.h>
@@ -73,6 +76,8 @@ float ddsAcc; // int is 4 bytes on the later arduino and teensy!
 
 short position, old_position;
 
+float dp_offset;
+
 // borrowed from http://jwbrooks.blogspot.com/2014/02/arduino-linear-regression-function.html
 void simpLinReg(float* x, float* y, float* lrCoef, int n){
     // pass x and y arrays (pointers), lrCoef pointer, and n.  The lrCoef array is comprised of the slope=lrCoef[0] and intercept=lrCoef[1].  n is length of the x and y arrays.
@@ -135,11 +140,49 @@ class filter {
 };
     
 
-filter lowpass;
+filter Vz_lowpass, Vx_lowpass;
+
+const float R =  8.31432; // N·m/(mol·K)
+const float Tb = 288.15; //K
+const float L_b = -0.0065;  // K/m
+const float g = 9.80665; // m/s2
+const float M =  0.0289644; // kg/mol
+const float roe_0 = 1.225; // kg/m^3
+const float Vcc = 5.0;//(NOTE: we could measure this using an a2d channel and a divider
+
+// calculate true airspeed based on pressure and differential pressure.
+// following densiy model to 11Km
+float TAS(float altitude) {
+    // from wikipedia 
+    // TAS = EAS * sqrt(roe_0 / roe)
+    // EAS = sqrt(2*q/ roe_0)
+    //where ro_0 = see level density 1.225 kg/m^3, q is dynamic pressure
+    
+    // transfer function for a MPXV7007 is Vout = Vs *(0.057*P + 0.5) + error
+    // we have a 2:1 voltage divider on the output to stay below 3.3V
+    // slope is fixed within 1% and we can ignore it, offset we'll take at startup, for what that's worth - ot maybe calibrate once?
+    
+    //read diff presssure directly (nothing else needs it)
+    //dp_offset : signal at P=0 -vs/4
+    int value = adc->analogRead(DPducer_PIN); // = Vout / 2 = Vs/2 * (0.057*P + 0.5) + error/2
+    float volts = value * 3.3 / adc->getMaxValue(ADC_0);
+    //Serial.println(volts);
+    float q = ((volts - dp_offset) * 2.0/ Vcc  - 0.5) / 0.057; //kPa
+    //Serial.println(q);
+    float EAS = sqrt(2*abs(q) * 1000.0 / roe_0); // m/sec
+    //https://en.wikipedia.org/wiki/Barometric_formula
+    
+    float roe = roe_0 * pow((1- L_b * altitude/Tb), 1 + g * M / (R -L_b));
+    float TAS = EAS * sqrt(roe_0/roe);
+    return TAS;
+    //Serial.println(EAS);
+    //return EAS;
+}    
 
 void setup()
 {
-    int i;
+    int i, value;
+    float volts;
     
     //handle the adc measuring the diff pressure (airspeed sensor)
     pinMode(DPducer_PIN, INPUT);
@@ -167,6 +210,17 @@ void setup()
 	sample_times[i] = 0.0;
     }
     
+    //calculate diff pressure offset:
+    dp_offset = 0.0;
+    //dp_offset : signal at P=0 -vs/4
+    // Vs = 5.0 (NOTE: we could measure this using an a2d channel and a divider
+    for (i=0; i< 200 ;i++) {
+	value = adc->analogRead(DPducer_PIN);    
+	volts = value * 3.3 / adc->getMaxValue(ADC_0);
+	dp_offset += volts - Vcc / 4.0;
+    }
+    dp_offset = dp_offset / 200.0;
+    
     stepper.setSpeed(300);
     // try to get it to center
     // uncomment this if necessary to set - but it does bang the motor against the stop!
@@ -180,6 +234,9 @@ void setup()
     Uart.begin(57600);
     
     Serial.println("start");
+    Serial.print("dp offset = ");
+    Serial.print(dp_offset);
+    Serial.println("V");
 }
 
 
@@ -187,7 +244,7 @@ void loop()
 {
     int i, value;
     long since_last_copy;
-    float climb_rate, climb_rate_filter;
+    float climb_rate, climb_rate_filter, airspeed;
 
     if (Uart.available()) {
 	char c = Uart.read();
@@ -218,9 +275,12 @@ void loop()
 	// NOTE : the filter here is for a fixed 25Hz sampling rate!
 	// FIXME - should be 25, but seems a mess
 	if (counter > 0)
-	    climb_rate_filter =  lowpass.step(H[counter % N_samples] - H[(counter-1) % N_samples]);
+	    climb_rate_filter =  Vz_lowpass.step(H[counter % N_samples] - H[(counter-1) % N_samples]);
+	
 	else // KLUDGE
-	    climb_rate_filter =  lowpass.step(H[0] - H[N_samples-1]);
+	    climb_rate_filter =  Vz_lowpass.step(H[0] - H[N_samples-1]);
+	
+	airspeed = Vx_lowpass.step(TAS(H[counter % N_samples]));
 	
 	//climb_rate = lrCoef[0] * 1000; // in m/sec
 	climb_rate = climb_rate_filter;
@@ -265,10 +325,12 @@ void loop()
 	Serial.print(position);
 	Serial.print(",");
 	Serial.print(old_position);
-	value = adc->analogRead(DPducer_PIN);
-	Serial.print(", DP= ");
-	Serial.println(value*3.3/adc->getMaxValue(ADC_0), DEC);
-	
+	//value = adc->analogRead(DPducer_PIN);
+	//Serial.print(", DP= ");
+	//Serial.println(value*3.3/adc->getMaxValue(ADC_0), DEC);
+	Serial.print(", V= ");
+	Serial.print(airspeed);
+	Serial.println(" m/sec");
 	// using the linear regression instead of my stupidity
 	//if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
 	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && counter % 12 > 6))
