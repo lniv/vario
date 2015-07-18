@@ -10,8 +10,12 @@
 #include <Stepper.h>
 #include <TimerOne.h>
 #include <TinyGPS.h>
+#include <ADC.h>
 
 #define speaker_PIN 10
+
+#define DPducer_PIN 14
+ADC *adc = new ADC(); // adc object;
 
 // change this to the number of steps on your motor
 #define STEPS 100
@@ -164,6 +168,15 @@ filter lowpass;
 void setup()
 {
     int i;
+    
+    //handle the adc measuring the diff pressure (airspeed sensor)
+    pinMode(DPducer_PIN, INPUT);
+    adc->setReference(ADC_REF_3V3, ADC_0); // might make sense to use the more stable 1.2V, but need to change scaling
+    adc->setAveraging(1); // set number of averages
+    adc->setResolution(16); // set bits of resolution
+    adc->setConversionSpeed(ADC_HIGH_SPEED); // change the conversion speed
+    adc->setSamplingSpeed(ADC_HIGH_SPEED); // change the sampling speed
+    
     /* Initialise the sensor */
     if(!bmp.begin())
     {
@@ -200,7 +213,7 @@ void setup()
 
 void loop()
 {
-    int i;
+    int i, value;
     long since_last_copy;
     float climb_rate, climb_rate_filter;
 
@@ -216,6 +229,7 @@ void loop()
 	}
     }
     if (grab_data) {
+	
 	noInterrupts();
 	since_last_copy = since_last;
 	grab_data = false;
@@ -278,7 +292,10 @@ void loop()
 	Serial.print(", positions = ");
 	Serial.print(position);
 	Serial.print(",");
-	Serial.println(old_position);
+	Serial.print(old_position);
+	value = adc->analogRead(DPducer_PIN);
+	Serial.print(", DP= ");
+	Serial.println(value*3.3/adc->getMaxValue(ADC_0), DEC);
 	
 	// using the linear regression instead of my stupidity
 	//if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
