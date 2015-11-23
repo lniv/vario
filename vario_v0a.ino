@@ -2,13 +2,22 @@
 // Copyright Niv Levy July 11th 2015 and later
 // released under GPL v2
 
+// TODO : clean up, get rid of the buffer and unused bits of code e.g. the regression fit.
+// TODO: separate the lowpass filters for driving the stepper / audio (which can be fast - 0.5sec or so - from the info sent to the computer, which must not have information above 0.5Hz (to be conservative, 0.8 * f_Nyquist = 0.4Hz for a 1Hz message rate)
 
 // Using openvario protocol - follow https://github.com/Turbo87/openvario-protocol (which tophat beta doesn't seem to actually get? may be worthwhile to implement something else
 
 // originally based on http://www.rcgroups.com/forums/showthread.php?t=1749208  ( Rolf R Bakke, Oct 2012), but zero remains.
+//ms5611 code adapated from http://forum.arduino.cc/index.php?topic=103377.0
+
+// Total Energy source - if defined, use a MS5611 module (GY-63) on i2c, address 76; if not, use a BMP180. for now i'm including both and letting the compiler deal with it - i am using the altitude calculation from the bmp, and i'm not short of resources.
+#define TE_MS5611 1
+
+#define MS5611_CSB_PIN 16 // CSB pin (address)
+#define MS5611_ADDRESS 0x76 
 
 #define USE_STEPPER 1
-
+#define MAKE_NOISE 1
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -34,6 +43,7 @@ ADC *adc = new ADC(); // adc object;
 Stepper stepper(STEPS, 3, 4, 5, 6);
     
 // how many steps per m/sec of climb rate (or something - units are still uncertain at this point in time. assuming we want a 20kt range (+-10kt) = 10m/sec range over 600 steps -> 1m/sec is 60 steps
+// either i got something above wrong, but it seemed that 0.5m/sec move the needle 1/3 scale!
 #define STEP_MULT 60.0 // 
 
 #endif //USE_STEPPER
@@ -44,12 +54,14 @@ Stepper stepper(STEPS, 3, 4, 5, 6);
 
 const int dT = 40; // time between samples, msec
 
+const float Fs = 1000.0F / dT; // sampling rate [Hz]
+
 const float ddsAcc_limit = dT * 2;
 const float sound_threshold = ddsAcc_limit / 2;
 
-// in m/sec (or something - the time unit is less certain here!
-const float neg_dead_band = -0.15F;
-const float pos_dead_band = 0.15F;
+// audio dead band [m/sec]
+const float neg_dead_band = -0.5F;
+const float pos_dead_band = 0.5F;
 
 float H[N_samples];
 float sample_times[N_samples];
@@ -91,6 +103,96 @@ float dp_offset;
 
 // keep track of gps message and just copy it when it's done. we don't actually need the parser, but i'll use it to see when a message is finished!
 String gps_s = String();
+
+#ifdef TE_MS5611
+
+uint16_t ms5611_C[7]; // compensation coefficients for the ms5611
+
+//initialize ms5611, read coefficients
+void ms5611_initial() {
+
+    Serial.println();
+    Serial.println("ms5611 PROM COEFFICIENTS");
+
+    Wire.beginTransmission(MS5611_ADDRESS);
+    Wire.write(0x1E); // reset
+    Wire.endTransmission();
+    delay(10);
+
+
+    for (int i=0; i<6  ; i++) {
+
+        Wire.beginTransmission(MS5611_ADDRESS);
+        Wire.write(0xA2 + (i * 2));
+        Wire.endTransmission();
+
+        Wire.beginTransmission(MS5611_ADDRESS);
+        Wire.requestFrom(MS5611_ADDRESS, (uint8_t) 6);
+        delay(1);
+        if(Wire.available()) {
+            ms5611_C[i+1] = Wire.read() << 8 | Wire.read();
+        }
+        else {
+            Serial.println("ms5611 - Error reading PROM 1"); // error reading the PROM or communicating with the device
+        }
+        Serial.println(ms5611_C[i+1]);
+    }
+    Serial.println();
+}
+
+//get ms5611 value for a given code
+long ms5611_getVal(byte code) {
+    unsigned long ret = 0;
+    Wire.beginTransmission(MS5611_ADDRESS);
+    Wire.write(code);
+    Wire.endTransmission();
+    delay(10);
+    // start read sequence
+    Wire.beginTransmission(MS5611_ADDRESS);
+    Wire.write((byte) 0x00);
+    Wire.endTransmission();
+    Wire.beginTransmission(MS5611_ADDRESS);
+    Wire.requestFrom(MS5611_ADDRESS, (int)3);
+    if (Wire.available() >= 3) {
+        ret = Wire.read() * (unsigned long)65536 + Wire.read() * (unsigned long)256 + Wire.read();
+    }
+    else {
+        ret = -1;
+    }
+    Wire.endTransmission();
+    return ret;
+}
+
+//read ms5611 and return pressure in hPA
+float ms5611_pressure() {
+    uint32_t D1 = 0;
+    uint32_t D2 = 0;
+    int64_t dT = 0;
+    int32_t TEMP = 0;
+    int64_t OFF = 0;
+    int64_t SENS = 0;
+    int32_t P = 0;
+    float Temperature;
+    float Pressure;
+    D1 = ms5611_getVal(0x48); // Pressure raw
+    D2 = ms5611_getVal(0x58);// Temperature raw
+
+    dT   = D2 - ((uint32_t)ms5611_C[5] << 8);
+    OFF  = ((int64_t)ms5611_C[2] << 16) + ((dT * ms5611_C[4]) >> 7);
+    SENS = ((int32_t)ms5611_C[1] << 15) + ((dT * ms5611_C[3]) >> 8);
+
+    TEMP = (int64_t)dT * (int64_t)ms5611_C[6] / 8388608 + 2000;
+
+    Temperature = (float)TEMP / 100;
+    
+    P  = ((int64_t)D1 * SENS / 2097152 - OFF) / 32768;
+
+    Pressure = (float)P / 100;
+    return Pressure;
+}
+
+#endif // TE_MS5611
+
 
 // borrowed from http://jwbrooks.blogspot.com/2014/02/arduino-linear-regression-function.html
 void simpLinReg(float* x, float* y, float* lrCoef, int n){
@@ -178,7 +280,7 @@ float TAS(float altitude) {
     // we have a 2:1 voltage divider on the output to stay below 3.3V
     // slope is fixed within 1% and we can ignore it, offset we'll take at startup, for what that's worth - ot maybe calibrate once?
     
-    //read diff presssure directly (nothing else needs it)
+    //read diff pressure directly (nothing else needs it)
     //dp_offset : signal at P=0 -vs/4
     value = adc->analogRead(DPducer_PIN); // = Vout / 2 = Vs/2 * (0.057*P + 0.5) + error/2
     volts = value * 3.3 / adc->getMaxValue(ADC_0);
@@ -236,7 +338,11 @@ void send_POV(float x, char t) {
 void info2FC(float airspeed, float climb_rate, float pressure) {
     send_POV(airspeed * 3.6, 'S'); // convert to km/h
     send_POV(climb_rate, 'E');  // already in m/sec
-    send_POV(pressure / 100.0, 'P');  //already in hPa
+#ifndef TE_MS5611
+    send_POV(pressure / 100.0, 'P');  //already in hPa (wtf? i guess it's actually in Pa)
+#else
+    send_POV(pressure, 'P');  //hPa
+#endif TE_MS5611
     //TODO send gps! we want to send RMC, GGA, GSA and GSV (and probbaly less?)
     return;
 }
@@ -246,6 +352,17 @@ void setup()
 {
     int i, value;
     float volts;
+    
+    //setup the MS5611 for correct i2c address
+    // put pin 16 output, pulled high - CSB on ms5611, select 76 or 77
+    pinMode(MS5611_CSB_PIN, OUTPUT);
+    digitalWrite(MS5611_CSB_PIN, HIGH);
+    
+#ifdef TE_MS5611 // no idea if this is really needed, handled somewhere else etc
+    // Disable internal pullups, 10Kohms are on the breakout
+    PORTC |= (1 << 4);
+    PORTC |= (1 << 5);
+#endif // TE_MS5611
     
     //handle the adc measuring the diff pressure (airspeed sensor)
     pinMode(DPducer_PIN, INPUT);
@@ -292,6 +409,10 @@ void setup()
     stepper.step(300);
     old_position = position = 300;
 #endif //USE_STEPPER
+
+#ifdef TE_MS5611
+    ms5611_initial();
+#endif //TE_MS5611
     
     Timer1.initialize(dT * 1000);
     Timer1.attachInterrupt(time_isr);
@@ -347,8 +468,15 @@ void loop()
 	grab_data = false;
 	interrupts();
 	
+#ifndef TE_MS5611
 	bmp.getPressure(&pressure);
-	H[counter % N_samples] = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure / 100.0F);
+        pressure /= 100.0F;
+#else
+        pressure = ms5611_pressure();
+#endif // TE_MS5611
+        //Serial.println(bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure));
+	H[counter % N_samples] = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+
 	sample_times[counter % N_samples] = float(millis());
 	for (i=0; i<N_samples ; i++)
 	    delta_times[i] = sample_times[i] - sample_times[0];
@@ -358,10 +486,10 @@ void loop()
 	// NOTE : the filter here is for a fixed 25Hz sampling rate!
 	// FIXME - should be 25, but seems a mess
 	if (counter > 0)
-	    climb_rate_filter =  Vz_lowpass.step(H[counter % N_samples] - H[(counter-1) % N_samples]);
+	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[counter % N_samples] - H[(counter-1) % N_samples]));
 	
 	else // KLUDGE
-	    climb_rate_filter =  Vz_lowpass.step(H[0] - H[N_samples-1]);
+	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[0] - H[N_samples-1]));
 	
 	airspeed = Vx_lowpass.step(TAS(H[counter % N_samples]));
 	
@@ -373,7 +501,7 @@ void loop()
 	position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
 	stepper.step(position - old_position);
 #endif //USE_STEPPER
-	
+        
 	// NOTE: can do non linear function here, e.g. logarithmic
 	// scaled so 5/msec is full range
 	toneFreq = constrain(climb_rate * 100, -500, 500);
@@ -417,13 +545,15 @@ void loop()
 	Serial.print(airspeed);
 	Serial.println(" m/sec");
 */
+
+#ifdef MAKE_NOISE
 	// using the linear regression instead of my stupidity
 	//if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
 	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && counter % 12 > 6))
 	    tone(speaker_PIN, toneFreq + 510);
 	else
 	    noTone(speaker_PIN);
-	
+#endif // MAKE_NOISE
 	// send info every 1sec
 	if (counter % 25 == 0) {
 	    info2FC(airspeed, climb_rate_filter, pressure);

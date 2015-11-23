@@ -1,6 +1,6 @@
 BOM
 
-The following components were bought and currently assembled on a proto board
+The following components were used - initially on a protoboard, moved onto a soldered setup. This is not the cheapest or smallest way to use the underlying components, but the point was to use a building block approach and avoid any surface mount soldering, or creating PCBs (though assembling all of these using 30 awg wire, as i've done, does resemble a rats nest - i will try to create a pcb for easily connecting all of these)
 
 Adafruit 
 
@@ -12,11 +12,13 @@ Adafruit
 1 x Adafruit TB6612 1.2A DC/Stepper Motor Driver Breakout Board[ID:2448] = $4.95
 
 modern device -  Pressure Sensor (MPXV) (#MD0590) (honeywell MPXV7007DP) 14$
-
 2 x 10K resistors (for MPXV7007DP voltage divider) - should be 1% or better.
 
-1 x LS20031 gps module
+Sparkfun:
+1 x LS20031 gps module [Sparkfun GPS-08975] = 59.95$
+
+1 x MS-5611 breakout module GY-63 [dealextreme #148866, numerous sources exist] = 14.35$
 
 Notes:
-currently the code does not use the gps, the diff pressure module and imu. Hence, a simpler BMP180 breakout board can be used and the gps and diff pressure modules can be dropped.
+currently the code does not use the gps (apart from forwarding it to the navigation computer), the diff pressure module (ditto - it does calculate airspeed, but does not use it for vario) and imu. Hence, a simpler BMP180 breakout board can be used and the gps and diff pressure modules can be dropped, or only the MS-5611 breakout module can be used (dropping gps, imu)
  
