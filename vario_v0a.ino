@@ -557,8 +557,8 @@ void loop()
 	// send info every 1sec
 	if (counter % 25 == 0) {
 	    info2FC(airspeed, climb_rate_filter, pressure);
-	    Serial.println(last_gps);
-	    FC.println(last_gps);
+	    Serial.println(last_gps.trim());
+	    FC.println(last_gps.trim());
 	}
 	counter++;
     }
