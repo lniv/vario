@@ -1,11 +1,11 @@
-// Simple presure based variometer, using a bmp180 to drive an audio and a stepper needle.
+// Simple presure based variometer, using an ms5611 to drive an audio and a stepper needle.
 // Copyright Niv Levy July 11th 2015 and later
 // released under GPL v2
 
 // TODO : clean up, get rid of the buffer and unused bits of code e.g. the regression fit.
 // TODO: separate the lowpass filters for driving the stepper / audio (which can be fast - 0.5sec or so - from the info sent to the computer, which must not have information above 0.5Hz (to be conservative, 0.8 * f_Nyquist = 0.4Hz for a 1Hz message rate)
 
-// Using openvario protocol - follow https://github.com/Turbo87/openvario-protocol (which tophat beta doesn't seem to actually get? may be worthwhile to implement something else
+// Using openvario protocol - follow https://github.com/Turbo87/openvario-protocol 
 
 // originally based on http://www.rcgroups.com/forums/showthread.php?t=1749208  ( Rolf R Bakke, Oct 2012), but zero remains.
 //ms5611 code adapated from http://forum.arduino.cc/index.php?topic=103377.0
