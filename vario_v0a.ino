@@ -1,11 +1,12 @@
-// Simple presure based variometer, using an ms5611 to drive an audio and a stepper needle.
+// Simple presure based variometer, using a bmp180 / ma5611 to drive an audio and a stepper needle.
+// also has a gps and a diff pressure measuring airspeed, but those are used for sending to a FC, not for vario functionality at prsent.
 // Copyright Niv Levy July 11th 2015 and later
 // released under GPL v2
 
 // TODO : clean up, get rid of the buffer and unused bits of code e.g. the regression fit.
 // TODO: separate the lowpass filters for driving the stepper / audio (which can be fast - 0.5sec or so - from the info sent to the computer, which must not have information above 0.5Hz (to be conservative, 0.8 * f_Nyquist = 0.4Hz for a 1Hz message rate)
 
-// Using openvario protocol - follow https://github.com/Turbo87/openvario-protocol 
+// Using openvario protocol - follow https://github.com/Turbo87/openvario-protocol
 
 // originally based on http://www.rcgroups.com/forums/showthread.php?t=1749208  ( Rolf R Bakke, Oct 2012), but zero remains.
 //ms5611 code adapated from http://forum.arduino.cc/index.php?topic=103377.0
@@ -71,6 +72,11 @@ float lrCoef[2];
 byte counter = 0;
 bool grab_data = false;
 long since_last;
+// use the first N packets to estimate speed bias
+#define N_bias_packets 1000
+//could be moved to setup
+int bias_packets = N_bias_packets; 
+float speed_bias = 0.0f; // m/sec
 
 elapsedMillis t = 0;
 
@@ -193,35 +199,6 @@ float ms5611_pressure() {
 
 #endif // TE_MS5611
 
-
-// borrowed from http://jwbrooks.blogspot.com/2014/02/arduino-linear-regression-function.html
-void simpLinReg(float* x, float* y, float* lrCoef, int n){
-    // pass x and y arrays (pointers), lrCoef pointer, and n.  The lrCoef array is comprised of the slope=lrCoef[0] and intercept=lrCoef[1].  n is length of the x and y arrays.
-    // http://en.wikipedia.org/wiki/Simple_linear_regression
-
-    // initialize variables
-    float xbar=0;
-    float ybar=0;
-    float xybar=0;
-    float xsqbar=0;
-    
-    // calculations required for linear regression
-    for (int i=0; i<n; i++){
-	xbar=xbar+x[i];
-	ybar=ybar+y[i];
-	xybar=xybar+x[i]*y[i];
-	xsqbar=xsqbar+x[i]*x[i];
-    }
-    xbar=xbar/n;
-    ybar=ybar/n;
-    xybar=xybar/n;
-    xsqbar=xsqbar/n;
-    
-    // simple linear regression algorithm
-    lrCoef[0]=(xybar-xbar*ybar)/(xsqbar-xbar*xbar);
-    lrCoef[1]=ybar-lrCoef[0]*xbar;
-}
-
 // from b, a = signal.iirfilter(4, f0/f, btype = 'lowpass', ftype = 'butterworth')
 double b[5] = {1.32937289e-05,   5.31749156e-05,   7.97623734e-05, 5.31749156e-05,   1.32937289e-05};
 double a[5] = {1.        , -3.67172909,  5.06799839, -3.11596693,  0.71991033};
@@ -255,7 +232,21 @@ class filter {
 		}
 };
     
-
+/*
+// a simple Kalman filter for the estimating vertical total energy change, almost a straight copy from Hari Nair at 
+class KF {
+        public:
+            KF() {
+                h = 0.0F;
+                Vz = 0.0F;
+            }
+            
+        private:
+            double h, Vz;
+            
+        public:
+            double update(h)
+*/
 filter Vz_lowpass, Vx_lowpass;
 
 const float R =  8.31432; // N·m/(mol·K)
@@ -283,15 +274,20 @@ float TAS(float altitude) {
     //read diff pressure directly (nothing else needs it)
     //dp_offset : signal at P=0 -vs/4
     value = adc->analogRead(DPducer_PIN); // = Vout / 2 = Vs/2 * (0.057*P + 0.5) + error/2
-    volts = value * 3.3 / adc->getMaxValue(ADC_0);
-    //Serial.println(volts);
-    q = ((volts - dp_offset) * 2.0/ Vcc  - 0.5) / 0.057; //kPa
+    q = (((float) value)  / 65535.0f - 0.5) / 0.057; //kPa
+    /*
+    volts = value * 2.5 / adc->getMaxValue(ADC_0);
+    //Serial.println(volts - dp_offset);
+    // notes above are wrong now - the offset is part of the dp_offset recorded at start
+    q = (volts - dp_offset) * 2.0/ (Vcc * 0.057); //kPa
+    */
     //Serial.println(q);
     // TODO: i'm not sure what is a legit thing to do - i can think of cases where pitot is lower than static, but whether to treat them as real airspeed or just throw them out is unclear to me. (i.e. it's essentially something/one sucking on the pitot - but i can think of a transient during e.g. a tail slide that would do this)
     if (q>0)
 	EAS = sqrt(2*q * 1000.0 / roe_0); // m/sec
     else
 	EAS = -sqrt(2*(-q) * 1000.0 / roe_0); //m/sec
+    //Serial.println(EAS);
     //https://en.wikipedia.org/wiki/Barometric_formula
     
     roe = roe_0 * pow((1- L_b * altitude/Tb), 1 + g * M / (R -L_b));
@@ -299,6 +295,7 @@ float TAS(float altitude) {
     return TAS;
     //Serial.println(EAS);
     //return EAS;
+    //return q;
 }    
 
 
@@ -343,7 +340,6 @@ void info2FC(float airspeed, float climb_rate, float pressure) {
 #else
     send_POV(pressure, 'P');  //hPa
 #endif TE_MS5611
-    //TODO send gps! we want to send RMC, GGA, GSA and GSV (and probbaly less?)
     return;
 }
 
@@ -366,11 +362,11 @@ void setup()
     
     //handle the adc measuring the diff pressure (airspeed sensor)
     pinMode(DPducer_PIN, INPUT);
-    adc->setReference(ADC_REF_3V3, ADC_0); // might make sense to use the more stable 1.2V, but need to change scaling
-    adc->setAveraging(1); // set number of averages
-    adc->setResolution(16); // set bits of resolution
-    adc->setConversionSpeed(ADC_HIGH_SPEED); // change the conversion speed
-    adc->setSamplingSpeed(ADC_HIGH_SPEED); // change the sampling speed
+    adc->setReference(ADC_REF_EXT, ADC_0); // might make sense to use the more stable 1.2V, but need to change scaling
+    adc->setAveraging(64); // set number of averages
+    adc->setResolution(14); // set bits of resolution
+    adc->setConversionSpeed(ADC_HIGH_SPEED_16BITS); // change the conversion speed
+    adc->setSamplingSpeed(ADC_HIGH_SPEED_16BITS); // change the sampling speed
     
     /* Initialise the sensor */
     if(!bmp.begin())
@@ -380,6 +376,7 @@ void setup()
 	while(1);
     }
     Serial.begin(115200); // note that number i BS for teensy.
+    delay(2000); // debug only, for seeing serial start on arduino console.  FIXME - comment out. 
     // just a place to start - should be actual pressure, but whatever
     //initialize pressure
     bmp.getPressure(&pressure);
@@ -389,18 +386,19 @@ void setup()
 	H[i] = old_altitude;
 	sample_times[i] = 0.0;
     }
-    
+    /*
     //calculate diff pressure offset:
     dp_offset = 0.0;
     //dp_offset : signal at P=0 -vs/4
     // Vs = 5.0 (NOTE: we could measure this using an a2d channel and a divider
     for (i=0; i< 200 ;i++) {
-	value = adc->analogRead(DPducer_PIN);    
+	value = adc->analogRead(DPducer_PIN);
 	volts = value * 3.3 / adc->getMaxValue(ADC_0);
-	dp_offset += volts - Vcc / 4.0;
+        Serial.println(volts);
+	dp_offset += volts;// - Vcc / 4.0;
     }
     dp_offset = dp_offset / 200.0;
-    
+    */
 #ifdef USE_STEPPER
     stepper.setSpeed(300);
     // try to get it to center
@@ -480,11 +478,8 @@ void loop()
 	sample_times[counter % N_samples] = float(millis());
 	for (i=0; i<N_samples ; i++)
 	    delta_times[i] = sample_times[i] - sample_times[0];
-	// KLUDGE - i should probably allocate mem properly etc
-	simpLinReg(&(delta_times[0]), &(H[0]), &(lrCoef[0]), N_samples);
 	
 	// NOTE : the filter here is for a fixed 25Hz sampling rate!
-	// FIXME - should be 25, but seems a mess
 	if (counter > 0)
 	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[counter % N_samples] - H[(counter-1) % N_samples]));
 	
@@ -492,7 +487,20 @@ void loop()
 	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[0] - H[N_samples-1]));
 	
 	airspeed = Vx_lowpass.step(TAS(H[counter % N_samples]));
-	
+	if (bias_packets) { 
+            bias_packets--;
+            speed_bias += airspeed / N_bias_packets;
+            if (bias_packets % 10 == 0 && bias_packets) {
+                Serial.print("speed bias = ");
+                Serial.print(speed_bias);
+                Serial.print(" N_packets = ");
+                Serial.println(bias_packets);
+            }
+            else if (bias_packets == 0) {
+                Serial.print("final speed bias = ");
+                Serial.println(speed_bias);
+            }
+        }
 	//climb_rate = lrCoef[0] * 1000; // in m/sec
 	climb_rate = climb_rate_filter;
 
@@ -556,7 +564,7 @@ void loop()
 #endif // MAKE_NOISE
 	// send info every 1sec
 	if (counter % 25 == 0) {
-	    info2FC(airspeed, climb_rate_filter, pressure);
+	    info2FC(airspeed - speed_bias, climb_rate_filter, pressure);
 	    Serial.println(last_gps.trim());
 	    FC.println(last_gps.trim());
 	}
