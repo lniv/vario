@@ -223,30 +223,17 @@ class filter {
 		    }
 		    x[4] = new_val;
 		    y[4]  = 0.0;
-		    for (i=0; i< 5 ; i++)
+		    for (i=0; i< 5 ; i++) {
 			y[4] += b[i] * x[4-i];
-		    for (i=1; i < 5; i++)
+                    }
+		    for (i=1; i < 5; i++) {
 			y[4] -= a[i] * y[4-i];
+                    }
 		    //y[4] = y[4] / a[0]; // not needed since a[0] =1.0;
 			return y[4];
 		}
 };
     
-/*
-// a simple Kalman filter for the estimating vertical total energy change, almost a straight copy from Hari Nair at 
-class KF {
-        public:
-            KF() {
-                h = 0.0F;
-                Vz = 0.0F;
-            }
-            
-        private:
-            double h, Vz;
-            
-        public:
-            double update(h)
-*/
 filter Vz_lowpass, Vx_lowpass;
 
 const float R =  8.31432; // N·m/(mol·K)
@@ -283,19 +270,17 @@ float TAS(float altitude) {
     */
     //Serial.println(q);
     // TODO: i'm not sure what is a legit thing to do - i can think of cases where pitot is lower than static, but whether to treat them as real airspeed or just throw them out is unclear to me. (i.e. it's essentially something/one sucking on the pitot - but i can think of a transient during e.g. a tail slide that would do this)
-    if (q>0)
+    if (q>0) {
 	EAS = sqrt(2*q * 1000.0 / roe_0); // m/sec
-    else
+    }
+    else {
 	EAS = -sqrt(2*(-q) * 1000.0 / roe_0); //m/sec
-    //Serial.println(EAS);
+    }
     //https://en.wikipedia.org/wiki/Barometric_formula
     
     roe = roe_0 * pow((1- L_b * altitude/Tb), 1 + g * M / (R -L_b));
     TAS = EAS * sqrt(roe_0/roe);
     return TAS;
-    //Serial.println(EAS);
-    //return EAS;
-    //return q;
 }    
 
 
@@ -312,15 +297,16 @@ void send_POV(float x, char t) {
     if (frac < 10)
 	ex_zero += "0";
 
-    if (x >=0)
+    if (x >=0) {
 	ps = ps + "POV," + t + "," + N + "." + ex_zero + frac;
-	//s = s + "$POV," + t + "," + N + "." + ex_zero + frac + "*" + checksum;
-    else
-	//s = s + "$POV," + t + ",-" + N + "." + ex_zero + frac + "*" + checksum;
+    }
+    else {
 	ps = ps + "POV," + t + ",-" + N + "." + ex_zero + frac;
+    }
     // checksum calculation from https://rietman.wordpress.com/2008/09/25/how-to-calculate-the-nmea-checksum/
-    for (i=0; i< ps.length(); i++)
+    for (i=0; i< ps.length(); i++) {
 	checksum ^= ps[i]; 
+    }
     s = s + "$" + ps + "*";
     Serial.print(s);
     Serial.println(checksum, HEX);
@@ -438,10 +424,12 @@ void loop()
     if (Uart.available()) {
 	char c = Uart.read();
  	 //   Serial.print(c);  // uncomment to see raw GPS data
-	if (c == '$')
+	if (c == '$') {
 	    gps_s = String() + '$';
-	else
+        }
+	else {
 	    gps_s = gps_s + c;
+        }
 	if (gps.encode(c)) {
 	    long lat, lon;
 	    unsigned long age;
@@ -453,9 +441,10 @@ void loop()
 		    Serial.println(gps_s);
 	    }*/
 	    //Serial.println(gps_s);
-	    if (gps_s.startsWith("$GPRMC"))
+	    if (gps_s.startsWith("$GPRMC")) {
 // 	    if (gps_s.startsWith("$GPGGA"))
 		last_gps = gps_s;
+            }
 	    gps_s = String();
 	}
     }
@@ -476,16 +465,17 @@ void loop()
 	H[counter % N_samples] = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
 
 	sample_times[counter % N_samples] = float(millis());
-	for (i=0; i<N_samples ; i++)
+	for (i=0; i<N_samples ; i++) {
 	    delta_times[i] = sample_times[i] - sample_times[0];
+        }
 	
 	// NOTE : the filter here is for a fixed 25Hz sampling rate!
-	if (counter > 0)
+	if (counter > 0) {
 	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[counter % N_samples] - H[(counter-1) % N_samples]));
-	
-	else // KLUDGE
+        }
+	else  {// KLUDGE
 	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[0] - H[N_samples-1]));
-	
+        }
 	airspeed = Vx_lowpass.step(TAS(H[counter % N_samples]));
 	if (bias_packets) { 
             bias_packets--;
@@ -515,14 +505,16 @@ void loop()
 	toneFreq = constrain(climb_rate * 100, -500, 500);
 	
 	// copied from my mkiv audio code
-	if (toneFreq > 0)
+	if (toneFreq > 0) {
 	    toneFreq += 150 ; 
-
+        }
 	ddsAcc += climb_rate * 100.0;
-	if (ddsAcc > ddsAcc_limit) 
+	if (ddsAcc > ddsAcc_limit) {
 	    ddsAcc = 0;
-	if (ddsAcc < 0)
+        }
+	if (ddsAcc < 0) {
 	    ddsAcc = 0;
+        }
 /*
 	Serial.print("i= ");
 	Serial.print(counter);
@@ -557,10 +549,12 @@ void loop()
 #ifdef MAKE_NOISE
 	// using the linear regression instead of my stupidity
 	//if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
-	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && counter % 12 > 6))
+	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && counter % 12 > 6)) {
 	    tone(speaker_PIN, toneFreq + 510);
-	else
+        }
+	else {
 	    noTone(speaker_PIN);
+        }
 #endif // MAKE_NOISE
 	// send info every 1sec
 	if (counter % 25 == 0) {
