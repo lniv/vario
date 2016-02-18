@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE eagle SYSTEM "eagle.dtd">
+<eagle version="7.5.0">
+<drawing>
+<settings>
+<setting alwaysvectorfont="no"/>
+<setting verticaltext="up"/>
+</settings>
+<grid distance="0.05" unitdist="inch" unit="inch" style="lines" multiple="1" display="yes" altdistance="0.025" altunitdist="inch" altunit="inch"/>
+<layers>
+<layer number="1" name="Top" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="16" name="Bottom" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="17" name="Pads" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="18" name="Vias" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="19" name="Unrouted" color="6" fill="1" visible="yes" active="yes"/>
+<layer number="20" name="Dimension" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="21" name="tPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="22" name="bPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="23" name="tOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="24" name="bOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="25" name="tNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="26" name="bNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="27" name="tValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="28" name="bValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="29" name="tStop" color="7" fill="3" visible="no" active="yes"/>
+<layer number="30" name="bStop" color="7" fill="6" visible="no" active="yes"/>
+<layer number="31" name="tCream" color="7" fill="4" visible="no" active="yes"/>
+<layer number="32" name="bCream" color="7" fill="5" visible="no" active="yes"/>
+<layer number="33" name="tFinish" color="6" fill="3" visible="no" active="yes"/>
+<layer number="34" name="bFinish" color="6" fill="6" visible="no" active="yes"/>
+<layer number="35" name="tGlue" color="7" fill="4" visible="no" active="yes"/>
+<layer number="36" name="bGlue" color="7" fill="5" visible="no" active="yes"/>
+<layer number="37" name="tTest" color="7" fill="1" visible="no" active="yes"/>
+<layer number="38" name="bTest" color="7" fill="1" visible="no" active="yes"/>
+<layer number="39" name="tKeepout" color="4" fill="11" visible="yes" active="yes"/>
+<layer number="40" name="bKeepout" color="1" fill="11" visible="yes" active="yes"/>
+<layer number="41" name="tRestrict" color="4" fill="10" visible="yes" active="yes"/>
+<layer number="42" name="bRestrict" color="1" fill="10" visible="yes" active="yes"/>
+<layer number="43" name="vRestrict" color="2" fill="10" visible="yes" active="yes"/>
+<layer number="44" name="Drills" color="7" fill="1" visible="no" active="yes"/>
+<layer number="45" name="Holes" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="46" name="Milling" color="3" fill="1" visible="no" active="yes"/>
+<layer number="47" name="Measures" color="7" fill="1" visible="no" active="yes"/>
+<layer number="48" name="Document" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="49" name="Reference" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="51" name="tDocu" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="52" name="bDocu" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="90" name="Modules" color="5" fill="1" visible="yes" active="yes"/>
+<layer number="91" name="Nets" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="92" name="Busses" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="93" name="Pins" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="94" name="Symbols" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="95" name="Names" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="96" name="Values" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="97" name="Info" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="98" name="Guide" color="6" fill="1" visible="yes" active="yes"/>
+</layers>
+<library>
+<packages>
+<package name="10_DOF_BREAKOUT">
+<pad name="VIN$1" x="-11.43" y="-8.89" drill="0.8" shape="square"/>
+<pad name="3.3V$1" x="-8.89" y="-8.89" drill="0.8" shape="square"/>
+<pad name="GND$1" x="-6.35" y="-8.89" drill="0.8" shape="square"/>
+<pad name="SCL" x="-3.81" y="-8.89" drill="0.8" shape="square"/>
+<pad name="SDA" x="-1.27" y="-8.89" drill="0.8" shape="square"/>
+<pad name="GINT" x="1.27" y="-8.89" drill="0.8" shape="square"/>
+<pad name="GRDY" x="3.81" y="-8.89" drill="0.8" shape="square"/>
+<pad name="LIN1" x="6.35" y="-8.89" drill="0.8" shape="square"/>
+<pad name="LIN2" x="8.89" y="-8.89" drill="0.8" shape="square"/>
+<pad name="LRDY" x="11.43" y="-8.89" drill="0.8" shape="square"/>
+<hole x="-16.51" y="-8.89" drill="2.2"/>
+<hole x="-16.51" y="8.89" drill="2.2"/>
+<hole x="16.51" y="-8.89" drill="2.2"/>
+<hole x="16.51" y="8.89" drill="2.2"/>
+<wire x1="-13.97" y1="6.35" x2="-13.97" y2="-6.35" width="0.127" layer="21"/>
+<wire x1="-13.97" y1="-6.35" x2="-16.51" y2="-6.35" width="0.127" layer="21"/>
+<wire x1="-16.51" y1="-6.35" x2="-16.51" y2="-11.43" width="0.127" layer="21" curve="180"/>
+<wire x1="-16.51" y1="-11.43" x2="16.51" y2="-11.43" width="0.127" layer="21"/>
+<wire x1="16.51" y1="-11.43" x2="16.51" y2="-6.35" width="0.127" layer="21" curve="180"/>
+<wire x1="16.51" y1="-6.35" x2="13.97" y2="-6.35" width="0.127" layer="21"/>
+<wire x1="13.97" y1="-6.35" x2="13.97" y2="6.35" width="0.127" layer="21"/>
+<wire x1="13.97" y1="6.35" x2="16.51" y2="6.35" width="0.127" layer="21"/>
+<wire x1="16.51" y1="6.35" x2="16.51" y2="11.43" width="0.127" layer="21" curve="180"/>
+<wire x1="16.51" y1="11.43" x2="-16.51" y2="11.43" width="0.127" layer="21"/>
+<wire x1="-16.51" y1="11.43" x2="-16.51" y2="6.35" width="0.127" layer="21" curve="180"/>
+<wire x1="-16.51" y1="6.35" x2="-13.97" y2="6.35" width="0.127" layer="21"/>
+<text x="-3.81" y="5.08" size="1.27" layer="25">&gt;NAME</text>
+<text x="-3.81" y="-2.54" size="1.27" layer="27">&gt;VALUE</text>
+</package>
+<package name="TB6612_BREAKOUT">
+<wire x1="-7.62" y1="13.335" x2="7.62" y2="13.335" width="0.127" layer="21"/>
+<wire x1="7.62" y1="13.335" x2="9.525" y2="12.065" width="0.127" layer="21" curve="-90"/>
+<wire x1="9.525" y1="12.065" x2="9.525" y2="-12.065" width="0.127" layer="21"/>
+<wire x1="9.525" y1="-12.065" x2="7.62" y2="-13.335" width="0.127" layer="21" curve="-90"/>
+<wire x1="7.62" y1="-13.335" x2="-7.62" y2="-13.335" width="0.127" layer="21"/>
+<wire x1="-7.62" y1="-13.335" x2="-9.525" y2="-12.065" width="0.127" layer="21" curve="-90"/>
+<wire x1="-9.525" y1="-12.065" x2="-9.525" y2="12.065" width="0.127" layer="21"/>
+<wire x1="-9.525" y1="12.065" x2="-7.62" y2="13.335" width="0.127" layer="21" curve="-90"/>
+<pad name="PWMA" x="-6.985" y="-11.43" drill="0.8" shape="square"/>
+<pad name="AIN2" x="-6.985" y="-8.89" drill="0.8" shape="square"/>
+<pad name="AIN1" x="-6.985" y="-6.35" drill="0.8" shape="square"/>
+<pad name="STDBY" x="-6.985" y="-3.81" drill="0.8" shape="square"/>
+<pad name="VM@2" x="-6.985" y="11.43" drill="0.8" shape="square"/>
+<pad name="VCC" x="-6.985" y="8.89" drill="0.8" shape="square"/>
+<pad name="GND@2" x="-6.985" y="6.35" drill="0.8" shape="square"/>
+<pad name="PWMB" x="-6.985" y="3.81" drill="0.8" shape="square"/>
+<pad name="BIN2" x="-6.985" y="1.27" drill="0.8" shape="square"/>
+<pad name="BIN1" x="-6.985" y="-1.27" drill="0.8" shape="square"/>
+<hole x="6.985" y="10.795" drill="2.2"/>
+<hole x="6.985" y="-10.795" drill="2.2"/>
+<pad name="GND@3" x="8.255" y="1.27" drill="0.8" shape="square"/>
+<pad name="GND@4" x="8.255" y="-1.27" drill="0.8" shape="square"/>
+<pad name="MB2" x="8.255" y="3.81" drill="0.8" shape="square"/>
+<pad name="MB1" x="8.255" y="6.35" drill="0.8" shape="square"/>
+<pad name="MA2" x="8.255" y="-3.81" drill="0.8" shape="square"/>
+<pad name="MA1" x="8.255" y="-6.35" drill="0.8" shape="square"/>
+<pad name="VM@1" x="-1.905" y="10.16" drill="1" shape="square"/>
+<pad name="GND@1" x="1.905" y="10.16" drill="1" shape="square"/>
+<text x="1.27" y="-6.35" size="1.27" layer="21" rot="R90">TB6612
+motor driver</text>
+</package>
+<package name="PAM8302A_BREAKOUT">
+<wire x1="-12.065" y1="-5.08" x2="-12.065" y2="5.08" width="0.127" layer="21"/>
+<wire x1="-12.065" y1="5.08" x2="-9.525" y2="7.62" width="0.127" layer="21" curve="-90"/>
+<wire x1="-9.525" y1="7.62" x2="9.525" y2="7.62" width="0.127" layer="21"/>
+<wire x1="9.525" y1="7.62" x2="12.065" y2="5.08" width="0.127" layer="21" curve="-90"/>
+<wire x1="12.065" y1="5.08" x2="12.065" y2="-5.08" width="0.127" layer="21"/>
+<wire x1="12.065" y1="-5.08" x2="9.525" y2="-7.62" width="0.127" layer="21" curve="-90"/>
+<wire x1="9.525" y1="-7.62" x2="-9.525" y2="-7.62" width="0.127" layer="21"/>
+<wire x1="-9.525" y1="-7.62" x2="-12.065" y2="-5.08" width="0.127" layer="21" curve="-90"/>
+<pad name="A+" x="-9.525" y="5.08" drill="1" shape="square"/>
+<pad name="A-" x="-9.525" y="2.54" drill="1" shape="square"/>
+<pad name="SD" x="-9.525" y="0" drill="1" shape="square"/>
+<pad name="VIN@1" x="-9.525" y="-2.54" drill="1" shape="square"/>
+<pad name="GND" x="-9.525" y="-5.08" drill="1" shape="square"/>
+<pad name="S+" x="7.62" y="1.905" drill="1.1" shape="square"/>
+<pad name="S-" x="7.62" y="-1.905" drill="1.1" shape="square"/>
+<hole x="9.525" y="5.08" drill="2.2"/>
+<hole x="9.525" y="-5.08" drill="2.2"/>
+<text x="-3.81" y="0" size="1.27" layer="21">PAM8302</text>
+</package>
+</packages>
+<symbols>
+<symbol name="10DOF_BREAKOUT">
+<pin name="VIN$1" x="-33.02" y="17.78" length="middle"/>
+<pin name="3.3V$1" x="-33.02" y="12.7" length="middle" direction="in"/>
+<pin name="GND$1" x="-33.02" y="7.62" length="middle" direction="in"/>
+<pin name="SCL" x="-33.02" y="2.54" length="middle"/>
+<pin name="SDA" x="-33.02" y="-2.54" length="middle"/>
+<pin name="GINT" x="-33.02" y="-7.62" length="middle"/>
+<pin name="GRDY" x="-33.02" y="-12.7" length="middle"/>
+<pin name="LIN1" x="-33.02" y="-17.78" length="middle"/>
+<pin name="LIN2" x="-33.02" y="-22.86" length="middle"/>
+<pin name="LRDY" x="-33.02" y="-27.94" length="middle"/>
+<wire x1="-15.24" y1="-30.48" x2="-25.4" y2="-30.48" width="0.254" layer="94"/>
+<wire x1="-25.4" y1="-30.48" x2="-27.94" y2="-27.94" width="0.254" layer="94" curve="-90"/>
+<wire x1="-27.94" y1="-27.94" x2="-27.94" y2="17.78" width="0.254" layer="94"/>
+<wire x1="-27.94" y1="17.78" x2="-25.4" y2="20.32" width="0.254" layer="94" curve="-90"/>
+<wire x1="-25.4" y1="20.32" x2="-15.24" y2="20.32" width="0.254" layer="94"/>
+<wire x1="-15.24" y1="20.32" x2="-12.7" y2="17.78" width="0.254" layer="94" curve="-90"/>
+<wire x1="-12.7" y1="17.78" x2="-12.7" y2="-27.94" width="0.254" layer="94"/>
+<wire x1="-12.7" y1="-27.94" x2="-15.24" y2="-30.48" width="0.254" layer="94" curve="-90"/>
+<text x="-17.78" y="-5.08" size="1.27" layer="94" font="vector" ratio="16" rot="R90">10DOF</text>
+<text x="-20.32" y="2.54" size="1.27" layer="95">&gt;NAME</text>
+<text x="-20.32" y="-10.16" size="1.27" layer="96">&gt;VALUE</text>
+</symbol>
+<symbol name="TB6612_BREAKOUT">
+<pin name="VM$1" x="-10.16" y="15.24" length="middle" direction="in"/>
+<pin name="VCC$1" x="-10.16" y="10.16" length="middle" direction="in"/>
+<pin name="GND$1" x="-10.16" y="5.08" length="middle" direction="in"/>
+<pin name="PWMB" x="-10.16" y="0" length="middle"/>
+<pin name="BIN2" x="-10.16" y="-5.08" length="middle"/>
+<pin name="BIN1" x="-10.16" y="-10.16" length="middle"/>
+<pin name="STDBY" x="-10.16" y="-15.24" length="middle"/>
+<pin name="AIN1" x="-10.16" y="-20.32" length="middle"/>
+<pin name="AIN2" x="-10.16" y="-25.4" length="middle"/>
+<pin name="MB2" x="22.86" y="7.62" length="middle" rot="R180"/>
+<pin name="MB1" x="22.86" y="2.54" length="middle" rot="R180"/>
+<pin name="MA1" x="22.86" y="-15.24" length="middle" rot="R180"/>
+<pin name="MA2" x="22.86" y="-20.32" length="middle" rot="R180"/>
+<pin name="PWMA" x="-10.16" y="-30.48" length="middle"/>
+<wire x1="-5.08" y1="-30.48" x2="-5.08" y2="15.24" width="0.254" layer="94"/>
+<wire x1="-5.08" y1="15.24" x2="-2.54" y2="17.78" width="0.254" layer="94" curve="-90"/>
+<wire x1="-2.54" y1="17.78" x2="17.78" y2="17.78" width="0.254" layer="94"/>
+<wire x1="17.78" y1="17.78" x2="20.32" y2="15.24" width="0.254" layer="94" curve="-90"/>
+<wire x1="20.32" y1="15.24" x2="20.32" y2="-30.48" width="0.254" layer="94"/>
+<wire x1="20.32" y1="-30.48" x2="17.78" y2="-33.02" width="0.254" layer="94" curve="-90"/>
+<wire x1="17.78" y1="-33.02" x2="-2.54" y2="-33.02" width="0.254" layer="94"/>
+<wire x1="-2.54" y1="-33.02" x2="-5.08" y2="-30.48" width="0.254" layer="94" curve="-90"/>
+<text x="7.62" y="-27.94" size="1.27" layer="94" font="vector" ratio="16" rot="R90">TB6612
+motor controller</text>
+<pin name="GND$2" x="5.08" y="20.32" visible="pin" length="middle" direction="in" rot="R270"/>
+<pin name="VM@2" x="10.16" y="20.32" length="middle" rot="R270"/>
+<pin name="GND$3" x="22.86" y="-2.54" length="middle" direction="in" rot="R180"/>
+<pin name="GND$4" x="22.86" y="-10.16" visible="pin" length="middle" direction="in" rot="R180"/>
+</symbol>
+<symbol name="PAM8302_BREAKOUT">
+<pin name="A+" x="-5.08" y="10.16" length="middle"/>
+<pin name="A-" x="-5.08" y="5.08" length="middle"/>
+<pin name="SD" x="-5.08" y="0" length="middle"/>
+<pin name="VIN" x="-5.08" y="-5.08" length="middle" direction="in"/>
+<pin name="GND" x="-5.08" y="-10.16" length="middle" direction="in"/>
+<pin name="S+" x="17.78" y="2.54" length="middle" rot="R180"/>
+<pin name="S-" x="17.78" y="-2.54" length="middle" rot="R180"/>
+<wire x1="12.7" y1="-15.24" x2="0" y2="-15.24" width="0.254" layer="94"/>
+<wire x1="0" y1="-15.24" x2="-2.54" y2="-12.7" width="0.254" layer="94" curve="-90"/>
+<wire x1="-2.54" y1="-12.7" x2="-2.54" y2="12.7" width="0.254" layer="94"/>
+<wire x1="-2.54" y1="12.7" x2="0" y2="15.24" width="0.254" layer="94" curve="-90"/>
+<wire x1="0" y1="15.24" x2="12.7" y2="15.24" width="0.254" layer="94"/>
+<wire x1="12.7" y1="15.24" x2="15.24" y2="12.7" width="0.254" layer="94" curve="-90"/>
+<wire x1="15.24" y1="12.7" x2="15.24" y2="-12.7" width="0.254" layer="94"/>
+<wire x1="15.24" y1="-12.7" x2="12.7" y2="-15.24" width="0.254" layer="94" curve="-90"/>
+<text x="12.7" y="-12.7" size="1.27" layer="94" font="vector" ratio="16" rot="R90">PAM8302A</text>
+</symbol>
+</symbols>
+<devicesets>
+<deviceset name="10DOF_BREAKOUT" prefix="ADA10DOF" uservalue="yes">
+<description>adafruit 10dof breakout board
+
+see https://www.adafruit.com/product/1604</description>
+<gates>
+<gate name="10DOF$1" symbol="10DOF_BREAKOUT" x="15.24" y="5.08"/>
+</gates>
+<devices>
+<device name="" package="10_DOF_BREAKOUT">
+<connects>
+<connect gate="10DOF$1" pin="3.3V$1" pad="3.3V$1"/>
+<connect gate="10DOF$1" pin="GINT" pad="GINT"/>
+<connect gate="10DOF$1" pin="GND$1" pad="GND$1"/>
+<connect gate="10DOF$1" pin="GRDY" pad="GRDY"/>
+<connect gate="10DOF$1" pin="LIN1" pad="LIN1"/>
+<connect gate="10DOF$1" pin="LIN2" pad="LIN2"/>
+<connect gate="10DOF$1" pin="LRDY" pad="LRDY"/>
+<connect gate="10DOF$1" pin="SCL" pad="SCL"/>
+<connect gate="10DOF$1" pin="SDA" pad="SDA"/>
+<connect gate="10DOF$1" pin="VIN$1" pad="VIN$1"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+</devices>
+</deviceset>
+<deviceset name="TB6612_BREAKOUT">
+<description>TB6612 motor driver breakout board - adafruit
+
+https://learn.adafruit.com/adafruit-tb6612-h-bridge-dc-stepper-motor-driver-breakout/overview</description>
+<gates>
+<gate name="TB6612$1" symbol="TB6612_BREAKOUT" x="0" y="0"/>
+</gates>
+<devices>
+<device name="" package="TB6612_BREAKOUT">
+<connects>
+<connect gate="TB6612$1" pin="AIN1" pad="AIN1"/>
+<connect gate="TB6612$1" pin="AIN2" pad="AIN2"/>
+<connect gate="TB6612$1" pin="BIN1" pad="BIN1"/>
+<connect gate="TB6612$1" pin="BIN2" pad="BIN2"/>
+<connect gate="TB6612$1" pin="GND$1" pad="GND@1"/>
+<connect gate="TB6612$1" pin="GND$2" pad="GND@2"/>
+<connect gate="TB6612$1" pin="GND$3" pad="GND@3"/>
+<connect gate="TB6612$1" pin="GND$4" pad="GND@4"/>
+<connect gate="TB6612$1" pin="MA1" pad="MA1"/>
+<connect gate="TB6612$1" pin="MA2" pad="MA2"/>
+<connect gate="TB6612$1" pin="MB1" pad="MB1"/>
+<connect gate="TB6612$1" pin="MB2" pad="MB2"/>
+<connect gate="TB6612$1" pin="PWMA" pad="PWMA"/>
+<connect gate="TB6612$1" pin="PWMB" pad="PWMB"/>
+<connect gate="TB6612$1" pin="STDBY" pad="STDBY"/>
+<connect gate="TB6612$1" pin="VCC$1" pad="VCC"/>
+<connect gate="TB6612$1" pin="VM$1" pad="VM@1"/>
+<connect gate="TB6612$1" pin="VM@2" pad="VM@2"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+</devices>
+</deviceset>
+<deviceset name="PAM8302A_BREAKOUT">
+<gates>
+<gate name="G$1" symbol="PAM8302_BREAKOUT" x="-7.62" y="2.54"/>
+</gates>
+<devices>
+<device name="" package="PAM8302A_BREAKOUT">
+<connects>
+<connect gate="G$1" pin="A+" pad="A+"/>
+<connect gate="G$1" pin="A-" pad="A-"/>
+<connect gate="G$1" pin="GND" pad="GND"/>
+<connect gate="G$1" pin="S+" pad="S+"/>
+<connect gate="G$1" pin="S-" pad="S-"/>
+<connect gate="G$1" pin="SD" pad="SD"/>
+<connect gate="G$1" pin="VIN" pad="VIN@1"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+</devices>
+</deviceset>
+</devicesets>
+</library>
+</drawing>
+<compatibility>
+<note version="6.3" minversion="6.2.2" severity="warning">
+Since Version 6.2.2 text objects can contain more than one line,
+which will not be processed correctly with this version.
+</note>
+</compatibility>
+</eagle>
