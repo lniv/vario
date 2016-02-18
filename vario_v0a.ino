@@ -236,6 +236,22 @@ class filter {
     
 filter Vz_lowpass, Vx_lowpass;
 
+/*
+// a simple Kalman filter for the estimating vertical total energy change, almost a straight copy from Hari Nair at 
+class KF {
+        public:
+            KF() {
+                h = 0.0F;
+                Vz = 0.0F;
+            }
+            
+        private:
+            double h, Vz;
+            
+        public:
+            double update(h)
+*/
+
 const float R =  8.31432; // N·m/(mol·K)
 const float Tb = 288.15; //K
 const float L_b = -0.0065;  // K/m
@@ -403,7 +419,7 @@ void setup()
     
     Uart.begin(57600);
     
-    FC.begin(4800);
+    FC.begin(115200);
     
     Serial.println("start");
     Serial.print("dp offset = ");
