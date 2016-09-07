@@ -199,42 +199,65 @@ float ms5611_pressure() {
 
 #endif // TE_MS5611
 
-// from b, a = signal.iirfilter(4, f0/f, btype = 'lowpass', ftype = 'butterworth')
-double b[5] = {1.32937289e-05,   5.31749156e-05,   7.97623734e-05, 5.31749156e-05,   1.32937289e-05};
-double a[5] = {1.        , -3.67172909,  5.06799839, -3.11596693,  0.71991033};
+// from b, a = signal.iirfilter(4, f0/f, btype = 'lowpass', ftype = 'butterworth') with f = fs = 25Hz, f0 = 0.5Hz
+//double b[5] = {1.32937289e-05,   5.31749156e-05,   7.97623734e-05, 5.31749156e-05,   1.32937289e-05};
+//double a[5] = {1.        , -3.67172909,  5.06799839, -3.11596693,  0.71991033};
 
-class filter {
+/* replace with three cascaded filters, aiming at 1.5sec (or 2/3 Hz)
+ * In [20]: iirfilter(2, ((2.0/ 3.0)/(25.0/2))** ( 1.0/ 3), btype = 'lowpass', ftype = 'butterworth')
+Out[20]: 
+(array([ 0.18780117,  0.37560234,  0.18780117]),
+ array([ 1.        , -0.45763623,  0.20884091]))
+*/
+//double b[3] = {0.18780117,  0.37560234,  0.18780117};
+//double a[3] = { 1.        , -0.45763623,  0.2088409};
+
+/*
+In [22]: iirfilter(2, ((1.0/ 3.0)/(25.0/2))** ( 1.0/ 3), btype = 'lowpass', ftype = 'butterworth')
+Out[22]: 
+(array([ 0.1302402 ,  0.26048041,  0.1302402 ]),
+ array([ 1.        , -0.75256894,  0.27352976]))
+*/
+double b[3] = { 0.1302402 ,  0.26048041,  0.1302402};
+double a[3] = { 1.        , -0.75256894,  0.27352976};
+
+
+class second_order_filter {
 	public:
-		filter() {
-		    for (int i=0; i < 5; i++) {
+		second_order_filter() {
+		    for (int i=0; i < 3; i++) {
 			x[i] = 0.0;
 			y[i] = 0.0;
 		    }
 		}
 	private:
-		double x[5], y[5];
+		double x[3], y[3];
 	public:
 		double step(double new_val) 
 		{
 		    int i;
-		    for (i=0; i< 4; i++) { 
+		    for (i=0; i< 2; i++) { 
 			x[i] = x[i+1];
 			y[i] = y[i+1];
 		    }
-		    x[4] = new_val;
-		    y[4]  = 0.0;
-		    for (i=0; i< 5 ; i++) {
-			y[4] += b[i] * x[4-i];
+		    x[2] = new_val;
+		    y[2]  = 0.0;
+		    for (i=0; i< 3 ; i++) {
+			y[2] += b[i] * x[2-i];
                     }
-		    for (i=1; i < 5; i++) {
-			y[4] -= a[i] * y[4-i];
+		    for (i=1; i < 3; i++) {
+			y[2] -= a[i] * y[2-i];
                     }
-		    //y[4] = y[4] / a[0]; // not needed since a[0] =1.0;
-			return y[4];
+                    return y[2];
 		}
+		
+		double current_value() {
+                    return y[2];
+                }
 };
     
-filter Vz_lowpass, Vx_lowpass;
+second_order_filter Vz_lowpass_0, Vz_lowpass_1, Vz_lowpass_2;
+second_order_filter Vx_lowpass_0, Vx_lowpass_1, Vx_lowpass_2;
 
 /*
 // a simple Kalman filter for the estimating vertical total energy change, almost a straight copy from Hari Nair at 
@@ -379,15 +402,6 @@ void setup()
     }
     Serial.begin(115200); // note that number i BS for teensy.
     delay(2000); // debug only, for seeing serial start on arduino console.  FIXME - comment out. 
-    // just a place to start - should be actual pressure, but whatever
-    //initialize pressure
-    bmp.getPressure(&pressure);
-    old_altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure / 100.0F);
-    
-    for (i =0; i < N_samples; i++) {
-	H[i] = old_altitude;
-	sample_times[i] = 0.0;
-    }
     /*
     //calculate diff pressure offset:
     dp_offset = 0.0;
@@ -412,7 +426,22 @@ void setup()
 
 #ifdef TE_MS5611
     ms5611_initial();
+    delay(1000);
+    pressure = ms5611_pressure();
+#else
+    bmp.getPressure(&pressure);
+    pressure /= 100.0F;
 #endif //TE_MS5611
+    
+     // just a place to start - should be actual pressure, but whatever
+    //initialize pressure altitude
+    old_altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+    
+    for (i =0; i < N_samples; i++) {
+	H[i] = old_altitude;
+	sample_times[i] = 0.0;
+    }
+    
     
     Timer1.initialize(dT * 1000);
     Timer1.attachInterrupt(time_isr);
@@ -429,12 +458,14 @@ void setup()
 
 int gps_messages = 0;
 String last_gps = String();
+float climb_rate_filter, airspeed; // ugly global, but easy to maintain it!
 
 void loop()
 {
     int i;
     long since_last_copy;
-    float climb_rate, climb_rate_filter, airspeed;
+    float climb_rate;
+    double Vz_filter_input;
     
 
     if (Uart.available()) {
@@ -478,21 +509,46 @@ void loop()
         pressure = ms5611_pressure();
 #endif // TE_MS5611
         //Serial.println(bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure));
-	H[counter % N_samples] = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+	H[counter] = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
 
-	sample_times[counter % N_samples] = float(millis());
+	sample_times[counter] = float(millis());
 	for (i=0; i<N_samples ; i++) {
 	    delta_times[i] = sample_times[i] - sample_times[0];
         }
 	
 	// NOTE : the filter here is for a fixed 25Hz sampling rate!
 	if (counter > 0) {
-	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[counter % N_samples] - H[(counter-1) % N_samples]));
+            Vz_filter_input = Fs * (H[counter] - H[counter-1]);
         }
 	else  {// KLUDGE
-	    climb_rate_filter =  Vz_lowpass.step(Fs * (H[0] - H[N_samples-1]));
+            Vz_filter_input = Fs * (H[0] - H[N_samples-1]);
         }
-	airspeed = Vx_lowpass.step(TAS(H[counter % N_samples]));
+        
+        
+        Vz_lowpass_0.step(Vz_filter_input);
+        if (counter % 2 == 0) {
+            Vz_lowpass_1.step(Vz_lowpass_0.current_value());
+        }
+        if (counter % 4 == 0) {
+            climb_rate_filter =  Vz_lowpass_2.step(Vz_lowpass_1.current_value());
+        }
+        Serial.print(counter);
+        Serial.print(" climb = ");
+        Serial.println(climb_rate_filter);
+        
+        /*
+        // dead simple block averager
+        
+        climb_rate_filter += Vz_filter_input
+        if (counter < N_samples -1) {
+            climb_rate_filter -= Fs * (H[counter + 1] - H[counter]);
+        */
+        
+        // TODO same 2, 4 decimation structure as above
+        Vx_lowpass_0.step(TAS(H[counter]));
+        Vx_lowpass_1.step(Vx_lowpass_0.current_value());
+	airspeed = Vx_lowpass_2.step(Vx_lowpass_1.current_value());
+        
 	if (bias_packets) { 
             bias_packets--;
             speed_bias += airspeed / N_bias_packets;
@@ -539,7 +595,7 @@ void loop()
     //     Serial.print(", P= ");
     //     Serial.print(pressure);
 	Serial.print(", Alt= ");
-	Serial.print(H[counter % N_samples]);
+	Serial.print(H[counter]);
 	Serial.print("m , lrCoef: ");
 	Serial.print(lrCoef[0] * 1000);
 	Serial.print(" m/sec,");
@@ -578,6 +634,11 @@ void loop()
 	    Serial.println(last_gps.trim());
 	    FC.println(last_gps.trim());
 	}
-	counter++;
+	if (counter < N_samples) {
+            counter++;
+        }
+        else {
+            counter = 0;
+        }
     }
 }
