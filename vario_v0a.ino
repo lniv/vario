@@ -27,6 +27,7 @@
 #include <TimerOne.h>
 #include <TinyGPS.h>
 #include <ADC.h>
+#include <RunningAverage.h>
 
 #define speaker_PIN 10
 
@@ -51,7 +52,7 @@ Stepper stepper(STEPS, 3, 4, 5, 6);
 
 // i'm going to do the filtering not so nicely, by just implementing a ring buffer, storing deltas and going from there. Since bmp180 seems to get about 30Hz, and i'd like at most 0.5sec, we'll start with 20 samples.
 // we should at least use a non square window, TODO
-#define N_samples 75 // 25sampls/sec and a 1.5sec time constant : 37.5 samples x 2  = 75
+#define N_samples 25 // 25sampls/sec and a 1.5sec time constant : 37.5 samples x 2  = 75
 
 const int dT = 40; // time between samples, msec
 
@@ -64,7 +65,8 @@ const float sound_threshold = ddsAcc_limit / 2;
 const float neg_dead_band = -0.5F;
 const float pos_dead_band = 0.5F;
 
-float H[N_samples];
+RunningAverage Vz(N_samples), Vx(N_samples), H(N_samples), P_buffer(N_samples);
+
 float sample_times[N_samples];
 float delta_times[N_samples];
 float lrCoef[2];
@@ -99,7 +101,9 @@ void time_isr(void) {
 
 unsigned long time = 0, last_time = 0;
 
-float toneFreq, pressure, altitude, old_altitude;
+float toneFreq, pressure;
+
+double altitude, old_altitude;
 
 float ddsAcc; // int is 4 bytes on the later arduino and teensy!
 
@@ -198,82 +202,6 @@ float ms5611_pressure() {
 }
 
 #endif // TE_MS5611
-
-// from b, a = signal.iirfilter(4, f0/f, btype = 'lowpass', ftype = 'butterworth') with f = fs = 25Hz, f0 = 0.5Hz
-//double b[5] = {1.32937289e-05,   5.31749156e-05,   7.97623734e-05, 5.31749156e-05,   1.32937289e-05};
-//double a[5] = {1.        , -3.67172909,  5.06799839, -3.11596693,  0.71991033};
-
-/* replace with three cascaded filters, aiming at 1.5sec (or 2/3 Hz)
- * In [20]: iirfilter(2, ((2.0/ 3.0)/(25.0/2))** ( 1.0/ 3), btype = 'lowpass', ftype = 'butterworth')
-Out[20]: 
-(array([ 0.18780117,  0.37560234,  0.18780117]),
- array([ 1.        , -0.45763623,  0.20884091]))
-*/
-//double b[3] = {0.18780117,  0.37560234,  0.18780117};
-//double a[3] = { 1.        , -0.45763623,  0.2088409};
-
-/*
-In [22]: iirfilter(2, ((1.0/ 3.0)/(25.0/2))** ( 1.0/ 3), btype = 'lowpass', ftype = 'butterworth')
-Out[22]: 
-(array([ 0.1302402 ,  0.26048041,  0.1302402 ]),
- array([ 1.        , -0.75256894,  0.27352976]))
-*/
-double b[3] = { 0.1302402 ,  0.26048041,  0.1302402};
-double a[3] = { 1.        , -0.75256894,  0.27352976};
-
-
-class second_order_filter {
-	public:
-		second_order_filter() {
-		    for (int i=0; i < 3; i++) {
-			x[i] = 0.0;
-			y[i] = 0.0;
-		    }
-		}
-	private:
-		double x[3], y[3];
-	public:
-		double step(double new_val) 
-		{
-		    int i;
-		    for (i=0; i< 2; i++) { 
-			x[i] = x[i+1];
-			y[i] = y[i+1];
-		    }
-		    x[2] = new_val;
-		    y[2]  = 0.0;
-		    for (i=0; i< 3 ; i++) {
-			y[2] += b[i] * x[2-i];
-                    }
-		    for (i=1; i < 3; i++) {
-			y[2] -= a[i] * y[2-i];
-                    }
-                    return y[2];
-		}
-		
-		double current_value() {
-                    return y[2];
-                }
-};
-    
-second_order_filter Vz_lowpass_0, Vz_lowpass_1, Vz_lowpass_2;
-second_order_filter Vx_lowpass_0, Vx_lowpass_1, Vx_lowpass_2;
-
-/*
-// a simple Kalman filter for the estimating vertical total energy change, almost a straight copy from Hari Nair at 
-class KF {
-        public:
-            KF() {
-                h = 0.0F;
-                Vz = 0.0F;
-            }
-            
-        private:
-            double h, Vz;
-            
-        public:
-            double update(h)
-*/
 
 const float R =  8.31432; // N·m/(mol·K)
 const float Tb = 288.15; //K
@@ -437,11 +365,10 @@ void setup()
     //initialize pressure altitude
     old_altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
     
-    for (i =0; i < N_samples; i++) {
-	H[i] = old_altitude;
-	sample_times[i] = 0.0;
-    }
-    
+    P_buffer.clear();
+    H.clear();
+    Vz.clear();
+    Vx.clear();
     
     Timer1.initialize(dT * 1000);
     Timer1.attachInterrupt(time_isr);
@@ -458,13 +385,12 @@ void setup()
 
 int gps_messages = 0;
 String last_gps = String();
-float climb_rate_filter, airspeed; // ugly global, but easy to maintain it!
 
 void loop()
 {
     int i;
     long since_last_copy;
-    float climb_rate;
+    float climb_rate, climb_rate_filter, airspeed;
     double Vz_filter_input;
     
 
@@ -508,50 +434,29 @@ void loop()
 #else
         pressure = ms5611_pressure();
 #endif // TE_MS5611
-        //Serial.println(bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure));
-	H[counter] = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
-
-	sample_times[counter] = float(millis());
-	for (i=0; i<N_samples ; i++) {
-	    delta_times[i] = sample_times[i] - sample_times[0];
-        }
-	
-	// NOTE : the filter here is for a fixed 25Hz sampling rate!
-	if (counter > 0) {
-            Vz_filter_input = Fs * (H[counter] - H[counter-1]);
-        }
-	else  {// KLUDGE
-            Vz_filter_input = Fs * (H[0] - H[N_samples-1]);
-        }
         
+        P_buffer.addValue(pressure);
         
-        Vz_lowpass_0.step(Vz_filter_input);
-        if (counter % 2 == 0) {
-            Vz_lowpass_1.step(Vz_lowpass_0.current_value());
-        }
-        if (counter % 4 == 0) {
-            climb_rate_filter =  Vz_lowpass_2.step(Vz_lowpass_1.current_value());
-        }
-        Serial.print(counter);
-        Serial.print(" climb = ");
-        Serial.println(climb_rate_filter);
+	altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+	H.addValue(altitude);
+        
+        Vz_filter_input = Fs * (altitude - old_altitude);
+        old_altitude = altitude;
         
         /*
-        // dead simple block averager
-        
-        climb_rate_filter += Vz_filter_input
-        if (counter < N_samples -1) {
-            climb_rate_filter -= Fs * (H[counter + 1] - H[counter]);
+        Serial.print("Vz ");
+        Serial.println(Vz_filter_input);
         */
+        Vz.addValue(Vz_filter_input);
+        climb_rate = Vz.getAverage();
         
         // TODO same 2, 4 decimation structure as above
-        Vx_lowpass_0.step(TAS(H[counter]));
-        Vx_lowpass_1.step(Vx_lowpass_0.current_value());
-	airspeed = Vx_lowpass_2.step(Vx_lowpass_1.current_value());
+        Vx.addValue(TAS(altitude));
+        airspeed = Vx.getAverage();
         
 	if (bias_packets) { 
             bias_packets--;
-            speed_bias += airspeed / N_bias_packets;
+            speed_bias += TAS(altitude) / N_bias_packets;
             if (bias_packets % 10 == 0 && bias_packets) {
                 Serial.print("speed bias = ");
                 Serial.print(speed_bias);
@@ -563,13 +468,15 @@ void loop()
                 Serial.println(speed_bias);
             }
         }
-	//climb_rate = lrCoef[0] * 1000; // in m/sec
-	climb_rate = climb_rate_filter;
 
 #ifdef USE_STEPPER
-	old_position = position;
-	position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
-	stepper.step(position - old_position);
+//         if (counter % 5 == 0) {
+//             old_position = position;
+//             position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
+//             stepper.step(position - old_position);
+//             Serial.print("Stepper position ");
+//             Serial.println(position);
+//         }
 #endif //USE_STEPPER
         
 	// NOTE: can do non linear function here, e.g. logarithmic
@@ -604,12 +511,8 @@ void loop()
 	Serial.print(toneFreq + 510);
 	Serial.print(", ddsAcc = ");
 	Serial.print(ddsAcc);
-	Serial.print(", climb_rate_filter = ");
-	Serial.print(climb_rate_filter);
 	Serial.print(", positions = ");
-	Serial.print(position);
-	Serial.print(",");
-	Serial.print(old_position);
+	
 	//value = adc->analogRead(DPducer_PIN);
 	//Serial.print(", DP= ");
 	//Serial.println(value*3.3/adc->getMaxValue(ADC_0), DEC);
@@ -630,7 +533,7 @@ void loop()
 #endif // MAKE_NOISE
 	// send info every 1sec
 	if (counter % 25 == 0) {
-	    info2FC(airspeed - speed_bias, climb_rate_filter, pressure);
+	    info2FC(airspeed - speed_bias, climb_rate, P_buffer.getAverage());
 	    Serial.println(last_gps.trim());
 	    FC.println(last_gps.trim());
 	}
