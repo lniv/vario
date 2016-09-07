@@ -38,6 +38,7 @@ ADC *adc = new ADC(); // adc object;
 #ifdef USE_STEPPER
 // change this to the number of steps on your motor
 #define STEPS 100
+#define STEPPER_OFFSET 22 // kludge - offset from mid point on a specific one
 // create an instance of the stepper class, specifying
 // the number of steps of the motor and the pins it's
 // attached to
@@ -348,8 +349,8 @@ void setup()
     // try to get it to center
     // uncomment this if necessary to set - but it does bang the motor against the stop!
     stepper.step(-600);
-    stepper.step(300);
-    old_position = position = 300;
+    stepper.step(300 + STEPPER_OFFSET);
+    old_position = position = 30;
 #endif //USE_STEPPER
 
 #ifdef TE_MS5611
