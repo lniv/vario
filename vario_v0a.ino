@@ -350,7 +350,7 @@ void setup()
     // uncomment this if necessary to set - but it does bang the motor against the stop!
     stepper.step(-600);
     stepper.step(300 + STEPPER_OFFSET);
-    old_position = position = 30;
+    old_position = position = 300;
 #endif //USE_STEPPER
 
 #ifdef TE_MS5611
@@ -471,13 +471,13 @@ void loop()
         }
 
 #ifdef USE_STEPPER
-//         if (counter % 5 == 0) {
-//             old_position = position;
-//             position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
-//             stepper.step(position - old_position);
+        if (counter % 5 == 0) {
+            old_position = position;
+            position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
+            stepper.step(position - old_position);
 //             Serial.print("Stepper position ");
 //             Serial.println(position);
-//         }
+        }
 #endif //USE_STEPPER
         
 	// NOTE: can do non linear function here, e.g. logarithmic
