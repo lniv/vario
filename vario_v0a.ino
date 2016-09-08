@@ -504,7 +504,7 @@ void loop()
         Serial.print(old_filtered_altitude);
         Serial.print(" current altitude ");
         Serial.println(current_filtered_altitude);
-        climb_rate = Fs * (current_filtered_altitude - old_filtered_altitude);
+        climb_rate = constrain(Fs * (current_filtered_altitude - old_filtered_altitude), -30.0, 30.0);
         
         Serial.print(counter);
         Serial.print(" climb = ");
