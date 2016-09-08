@@ -45,7 +45,7 @@ Stepper stepper(STEPS, 3, 4, 5, 6);
     
 // how many steps per m/sec of climb rate (or something - units are still uncertain at this point in time. assuming we want a 20kt range (+-10kt) = 10m/sec range over 600 steps -> 1m/sec is 60 steps
 // either i got something above wrong, but it seemed that 0.5m/sec move the needle 1/3 scale!
-#define STEP_MULT 60.0 // 
+#define STEP_MULT 6.0 // 
 
 #endif //USE_STEPPER
 
@@ -64,10 +64,6 @@ const float sound_threshold = ddsAcc_limit / 2;
 const float neg_dead_band = -0.5F;
 const float pos_dead_band = 0.5F;
 
-float H[N_samples];
-float sample_times[N_samples];
-float delta_times[N_samples];
-float lrCoef[2];
 
 byte counter = 0;
 bool grab_data = false;
@@ -99,7 +95,7 @@ void time_isr(void) {
 
 unsigned long time = 0, last_time = 0;
 
-float toneFreq, pressure, altitude, old_altitude;
+float toneFreq, pressure;
 
 float ddsAcc; // int is 4 bytes on the later arduino and teensy!
 
@@ -199,40 +195,28 @@ float ms5611_pressure() {
 
 #endif // TE_MS5611
 
-// from b, a = signal.iirfilter(4, f0/f, btype = 'lowpass', ftype = 'butterworth') with f = fs = 25Hz, f0 = 0.5Hz
-//double b[5] = {1.32937289e-05,   5.31749156e-05,   7.97623734e-05, 5.31749156e-05,   1.32937289e-05};
-//double a[5] = {1.        , -3.67172909,  5.06799839, -3.11596693,  0.71991033};
-
-/* replace with three cascaded filters, aiming at 1.5sec (or 2/3 Hz)
- * In [20]: iirfilter(2, ((2.0/ 3.0)/(25.0/2))** ( 1.0/ 3), btype = 'lowpass', ftype = 'butterworth')
-Out[20]: 
-(array([ 0.18780117,  0.37560234,  0.18780117]),
- array([ 1.        , -0.45763623,  0.20884091]))
-*/
-//double b[3] = {0.18780117,  0.37560234,  0.18780117};
-//double a[3] = { 1.        , -0.45763623,  0.2088409};
-
-/*
-In [22]: iirfilter(2, ((1.0/ 3.0)/(25.0/2))** ( 1.0/ 3), btype = 'lowpass', ftype = 'butterworth')
-Out[22]: 
-(array([ 0.1302402 ,  0.26048041,  0.1302402 ]),
- array([ 1.        , -0.75256894,  0.27352976]))
-*/
-double b[3] = { 0.1302402 ,  0.26048041,  0.1302402};
-double a[3] = { 1.        , -0.75256894,  0.27352976};
-
-
+//second order filter brute force implementation
 class second_order_filter {
 	public:
-		second_order_filter() {
-		    for (int i=0; i < 3; i++) {
+		second_order_filter(double *b_v, double *a_v) : a(a_v), b(b_v){
+                    for (int i=0; i < 3; i++) {
 			x[i] = 0.0;
 			y[i] = 0.0;
 		    }
 		}
 	private:
 		double x[3], y[3];
+                double *a, *b;
 	public:
+            
+                //fill x and y with a given value
+                void fill(double init_value) {
+                    for (int i=0; i < 3; i++) {
+			x[i] = init_value;
+		    }
+                }
+                
+                //advance the filter with a given input value
 		double step(double new_val) 
 		{
 		    int i;
@@ -243,10 +227,10 @@ class second_order_filter {
 		    x[2] = new_val;
 		    y[2]  = 0.0;
 		    for (i=0; i< 3 ; i++) {
-			y[2] += b[i] * x[2-i];
+			y[2] += b[i] * x[2 -i];
                     }
 		    for (i=1; i < 3; i++) {
-			y[2] -= a[i] * y[2-i];
+			y[2] -= a[i] * y[2 -i];
                     }
                     return y[2];
 		}
@@ -255,25 +239,22 @@ class second_order_filter {
                     return y[2];
                 }
 };
-    
-second_order_filter Vz_lowpass_0, Vz_lowpass_1, Vz_lowpass_2;
-second_order_filter Vx_lowpass_0, Vx_lowpass_1, Vx_lowpass_2;
 
 /*
-// a simple Kalman filter for the estimating vertical total energy change, almost a straight copy from Hari Nair at 
-class KF {
-        public:
-            KF() {
-                h = 0.0F;
-                Vz = 0.0F;
-            }
-            
-        private:
-            double h, Vz;
-            
-        public:
-            double update(h)
+In [15]: signal.iirfilter(4, 1.0 / (25.0 / 2), btype = 'lowpass', ftype = 'butterworth', output='sos')
+Out[15]: 
+array([[  1.83216023e-04,   3.66432047e-04,   1.83216023e-04,
+          1.00000000e+00,  -1.57523998e+00,   6.26334259e-01],
+       [  1.00000000e+00,   2.00000000e+00,   1.00000000e+00,
+          1.00000000e+00,  -1.76882786e+00,   8.26201333e-01]])
 */
+double b0[3] = {1.83216023e-04,   3.66432047e-04,   1.83216023e-04};
+double a0[3] = {1.00000000e+00,  -1.57523998e+00,   6.26334259e-01};
+double b1[3] = {1.00000000e+00,   2.00000000e+00,   1.00000000e+00};
+double a1[3] = {1.00000000e+00,  -1.76882786e+00,   8.26201333e-01};
+
+second_order_filter H0(b0, a0), H1(b1, a1);
+second_order_filter Vx_lowpass_0(b0, a0), Vx_lowpass_1(b1, a1);
 
 const float R =  8.31432; // N·m/(mol·K)
 const float Tb = 288.15; //K
@@ -373,6 +354,7 @@ void setup()
 {
     int i, value;
     float volts;
+    double altitude;
     
     //setup the MS5611 for correct i2c address
     // put pin 16 output, pulled high - CSB on ms5611, select 76 or 77
@@ -433,15 +415,17 @@ void setup()
     pressure /= 100.0F;
 #endif //TE_MS5611
     
-     // just a place to start - should be actual pressure, but whatever
-    //initialize pressure altitude
-    old_altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
-    
-    for (i =0; i < N_samples; i++) {
-	H[i] = old_altitude;
-	sample_times[i] = 0.0;
+
+    //initialize filters
+    altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+    H0.fill(altitude);
+    H1.fill(altitude);
+    for (i  =0 ; i <3 ; i++) {
+        Serial.print(" H1");
+        Serial.println(H1.current_value());
     }
-    
+    Vx_lowpass_0.fill(TAS(altitude));
+    Vx_lowpass_1.fill(TAS(altitude));
     
     Timer1.initialize(dT * 1000);
     Timer1.attachInterrupt(time_isr);
@@ -458,14 +442,13 @@ void setup()
 
 int gps_messages = 0;
 String last_gps = String();
-float climb_rate_filter, airspeed; // ugly global, but easy to maintain it!
 
 void loop()
 {
     int i;
     long since_last_copy;
-    float climb_rate;
-    double Vz_filter_input;
+    double climb_rate, airspeed;
+    double pressure, altitude, old_filtered_altitude, current_filtered_altitude;
     
 
     if (Uart.available()) {
@@ -509,45 +492,27 @@ void loop()
         pressure = ms5611_pressure();
 #endif // TE_MS5611
         //Serial.println(bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure));
-	H[counter] = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+	altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
 
-	sample_times[counter] = float(millis());
-	for (i=0; i<N_samples ; i++) {
-	    delta_times[i] = sample_times[i] - sample_times[0];
-        }
-	
-	// NOTE : the filter here is for a fixed 25Hz sampling rate!
-	if (counter > 0) {
-            Vz_filter_input = Fs * (H[counter] - H[counter-1]);
-        }
-	else  {// KLUDGE
-            Vz_filter_input = Fs * (H[0] - H[N_samples-1]);
-        }
+        Serial.print(" altitude ");
+        Serial.println(altitude);
+        H0.step(altitude);
+        old_filtered_altitude = H1.current_value();
+        H1.step(H0.current_value());
+        current_filtered_altitude = H1.current_value();
+        Serial.print("old_filtered_altitude ");
+        Serial.print(old_filtered_altitude);
+        Serial.print(" current altitude ");
+        Serial.println(current_filtered_altitude);
+        climb_rate = Fs * (current_filtered_altitude - old_filtered_altitude);
         
-        
-        Vz_lowpass_0.step(Vz_filter_input);
-        if (counter % 2 == 0) {
-            Vz_lowpass_1.step(Vz_lowpass_0.current_value());
-        }
-        if (counter % 4 == 0) {
-            climb_rate_filter =  Vz_lowpass_2.step(Vz_lowpass_1.current_value());
-        }
         Serial.print(counter);
         Serial.print(" climb = ");
-        Serial.println(climb_rate_filter);
-        
-        /*
-        // dead simple block averager
-        
-        climb_rate_filter += Vz_filter_input
-        if (counter < N_samples -1) {
-            climb_rate_filter -= Fs * (H[counter + 1] - H[counter]);
-        */
+        Serial.println(climb_rate);
         
         // TODO same 2, 4 decimation structure as above
-        Vx_lowpass_0.step(TAS(H[counter]));
-        Vx_lowpass_1.step(Vx_lowpass_0.current_value());
-	airspeed = Vx_lowpass_2.step(Vx_lowpass_1.current_value());
+        Vx_lowpass_0.step(TAS(H1.current_value()));
+        airspeed = Vx_lowpass_1.step(Vx_lowpass_0.current_value());
         
 	if (bias_packets) { 
             bias_packets--;
@@ -563,8 +528,6 @@ void loop()
                 Serial.println(speed_bias);
             }
         }
-	//climb_rate = lrCoef[0] * 1000; // in m/sec
-	climb_rate = climb_rate_filter;
 
 #ifdef USE_STEPPER
 	old_position = position;
@@ -630,7 +593,7 @@ void loop()
 #endif // MAKE_NOISE
 	// send info every 1sec
 	if (counter % 25 == 0) {
-	    info2FC(airspeed - speed_bias, climb_rate_filter, pressure);
+	    info2FC(airspeed - speed_bias, climb_rate, pressure);
 	    Serial.println(last_gps.trim());
 	    FC.println(last_gps.trim());
 	}
