@@ -417,6 +417,7 @@ void setup()
     
 
     //initialize filters
+	//TODO use some sort of averaging to set it - otherwise we have a mess.
     altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
     H0.fill(altitude);
     H1.fill(altitude);
@@ -480,19 +481,19 @@ void loop()
     }
     if (grab_data) {
 	
-	noInterrupts();
-	since_last_copy = since_last;
-	grab_data = false;
-	interrupts();
+		noInterrupts();
+		since_last_copy = since_last;
+		grab_data = false;
+		interrupts();
 	
 #ifndef TE_MS5611
-	bmp.getPressure(&pressure);
+		bmp.getPressure(&pressure);
         pressure /= 100.0F;
 #else
         pressure = ms5611_pressure();
 #endif // TE_MS5611
         //Serial.println(bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure));
-	altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+		altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
 
         Serial.print(" altitude ");
         Serial.println(altitude);
@@ -514,94 +515,94 @@ void loop()
         Vx_lowpass_0.step(TAS(H1.current_value()));
         airspeed = Vx_lowpass_1.step(Vx_lowpass_0.current_value());
         
-	if (bias_packets) { 
-            bias_packets--;
-            speed_bias += airspeed / N_bias_packets;
-            if (bias_packets % 10 == 0 && bias_packets) {
-                Serial.print("speed bias = ");
-                Serial.print(speed_bias);
-                Serial.print(" N_packets = ");
-                Serial.println(bias_packets);
-            }
-            else if (bias_packets == 0) {
-                Serial.print("final speed bias = ");
-                Serial.println(speed_bias);
-            }
-        }
+		if (bias_packets) { 
+				bias_packets--;
+				speed_bias += airspeed / N_bias_packets;
+				if (bias_packets % 10 == 0 && bias_packets) {
+					Serial.print("speed bias = ");
+					Serial.print(speed_bias);
+					Serial.print(" N_packets = ");
+					Serial.println(bias_packets);
+				}
+				else if (bias_packets == 0) {
+					Serial.print("final speed bias = ");
+					Serial.println(speed_bias);
+				}
+			}
 
 #ifdef USE_STEPPER
-	old_position = position;
-	position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
-	stepper.step(position - old_position);
+		old_position = position;
+		position = constrain(300 - int(climb_rate * STEP_MULT), 0, 600);
+		stepper.step(position - old_position);
 #endif //USE_STEPPER
         
-	// NOTE: can do non linear function here, e.g. logarithmic
-	// scaled so 5/msec is full range
-	toneFreq = constrain(climb_rate * 100, -500, 500);
-	
-	// copied from my mkiv audio code
-	if (toneFreq > 0) {
-	    toneFreq += 150 ; 
-        }
-	ddsAcc += climb_rate * 100.0;
-	if (ddsAcc > ddsAcc_limit) {
-	    ddsAcc = 0;
-        }
-	if (ddsAcc < 0) {
-	    ddsAcc = 0;
-        }
-/*
-	Serial.print("i= ");
-	Serial.print(counter);
-	Serial.print(", dt (ms)= ");
-	Serial.print(since_last_copy);
-    //     Serial.print(", P= ");
-    //     Serial.print(pressure);
-	Serial.print(", Alt= ");
-	Serial.print(H[counter]);
-	Serial.print("m , lrCoef: ");
-	Serial.print(lrCoef[0] * 1000);
-	Serial.print(" m/sec,");
-	Serial.print(lrCoef[1]);
-	Serial.print(" m, f= ");
-	Serial.print(toneFreq + 510);
-	Serial.print(", ddsAcc = ");
-	Serial.print(ddsAcc);
-	Serial.print(", climb_rate_filter = ");
-	Serial.print(climb_rate_filter);
-	Serial.print(", positions = ");
-	Serial.print(position);
-	Serial.print(",");
-	Serial.print(old_position);
-	//value = adc->analogRead(DPducer_PIN);
-	//Serial.print(", DP= ");
-	//Serial.println(value*3.3/adc->getMaxValue(ADC_0), DEC);
-	Serial.print(", V= ");
-	Serial.print(airspeed);
-	Serial.println(" m/sec");
-*/
+		// NOTE: can do non linear function here, e.g. logarithmic
+		// scaled so 5/msec is full range
+		toneFreq = constrain(climb_rate * 100, -500, 500);
+		
+		// copied from my mkiv audio code
+		if (toneFreq > 0) {
+			toneFreq += 150 ; 
+			}
+		ddsAcc += climb_rate * 100.0;
+		if (ddsAcc > ddsAcc_limit) {
+			ddsAcc = 0;
+			}
+		if (ddsAcc < 0) {
+			ddsAcc = 0;
+			}
+	/*
+		Serial.print("i= ");
+		Serial.print(counter);
+		Serial.print(", dt (ms)= ");
+		Serial.print(since_last_copy);
+		//     Serial.print(", P= ");
+		//     Serial.print(pressure);
+		Serial.print(", Alt= ");
+		Serial.print(H[counter]);
+		Serial.print("m , lrCoef: ");
+		Serial.print(lrCoef[0] * 1000);
+		Serial.print(" m/sec,");
+		Serial.print(lrCoef[1]);
+		Serial.print(" m, f= ");
+		Serial.print(toneFreq + 510);
+		Serial.print(", ddsAcc = ");
+		Serial.print(ddsAcc);
+		Serial.print(", climb_rate_filter = ");
+		Serial.print(climb_rate_filter);
+		Serial.print(", positions = ");
+		Serial.print(position);
+		Serial.print(",");
+		Serial.print(old_position);
+		//value = adc->analogRead(DPducer_PIN);
+		//Serial.print(", DP= ");
+		//Serial.println(value*3.3/adc->getMaxValue(ADC_0), DEC);
+		Serial.print(", V= ");
+		Serial.print(airspeed);
+		Serial.println(" m/sec");
+		*/
 
 #ifdef MAKE_NOISE
-	// using the linear regression instead of my stupidity
-	//if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
-	if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && counter % 12 > 6)) {
-	    tone(speaker_PIN, toneFreq + 510);
-        }
-	else {
-	    noTone(speaker_PIN);
-        }
+		// using the linear regression instead of my stupidity
+		//if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && ddsAcc > sound_threshold))
+		if (climb_rate < neg_dead_band || ( climb_rate > pos_dead_band && counter % 12 > 6)) {
+			tone(speaker_PIN, toneFreq + 510);
+			}
+		else {
+			noTone(speaker_PIN);
+			}
 #endif // MAKE_NOISE
-	// send info every 1sec
-	if (counter % 25 == 0) {
-	    info2FC(airspeed - speed_bias, climb_rate, pressure);
-	    Serial.println(last_gps.trim());
-	    FC.println(last_gps.trim());
-	}
-	if (counter < N_samples) {
-            counter++;
-        }
-        else {
-            counter = 0;
-        }
+		// send info every 1sec
+		if (counter % 25 == 0) {
+			info2FC(airspeed - speed_bias, climb_rate, pressure);
+			Serial.println(last_gps.trim());
+			FC.println(last_gps.trim());
+		}
+		if (counter < N_samples) {
+				counter++;
+			}
+			else {
+				counter = 0;
+		}
     }
 }
