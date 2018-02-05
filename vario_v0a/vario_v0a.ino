@@ -74,7 +74,7 @@ long since_last;
 int bias_packets = N_bias_packets; 
 float speed_bias = 0.0f; // m/sec
 
-elapsedMillis t = 0;
+elapsedMillis dt_global = 0, dt = 0;
 
 Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(BMP085_MODE_ULTRAHIGHRES);
 
@@ -86,8 +86,8 @@ TinyGPS gps;
 #define FC Serial3
 
 void time_isr(void) {
-    since_last = long(t);
-    t = 0;
+    since_last = long(dt);
+    dt = 0;
     grab_data = true;
 }
 
@@ -247,11 +247,41 @@ array([[  1.83216023e-04,   3.66432047e-04,   1.83216023e-04,
           1.00000000e+00,  -1.57523998e+00,   6.26334259e-01],
        [  1.00000000e+00,   2.00000000e+00,   1.00000000e+00,
           1.00000000e+00,  -1.76882786e+00,   8.26201333e-01]])
-*/
+
 double b0[3] = {1.83216023e-04,   3.66432047e-04,   1.83216023e-04};
 double a0[3] = {1.00000000e+00,  -1.57523998e+00,   6.26334259e-01};
 double b1[3] = {1.00000000e+00,   2.00000000e+00,   1.00000000e+00};
 double a1[3] = {1.00000000e+00,  -1.76882786e+00,   8.26201333e-01};
+*/
+
+/*
+ * try much slower
+In [33]: iirfilter(4, 0.25 / (25.0 / 2), btype = 'lowpass', ftype = 'butterworth', output='sos')
+Out[33]: 
+array([[  8.98486146e-07,   1.79697229e-06,   8.98486146e-07,
+          1.00000000e+00,  -1.88660958e+00,   8.90339736e-01],
+       [  1.00000000e+00,   2.00000000e+00,   1.00000000e+00,
+          1.00000000e+00,  -1.94921596e+00,   9.53069895e-01]])
+ - this sort of matches a winter, but with much less damping. 
+double b0[3] = {8.98486146e-07,   1.79697229e-06,   8.98486146e-07};
+double a0[3] = {1.00000000e+00,  -1.88660958e+00,   8.90339736e-01};
+double b1[3] = {1.        ,  2.        ,  1. };
+double a1[3] = {1.00000000e+00,  -1.94921596e+00,   9.53069895e-01};
+*/
+
+/* try bessel - less ringing.
+In [36]: iirfilter(4, 0.25 / (25.0 / 2), btype = 'lowpass', ftype = 'bessel', output='sos')
+Out[36]: 
+array([[  8.84603631e-07,   1.76920726e-06,   8.84603631e-07,
+          1.00000000e+00,  -1.88914508e+00,   8.92476435e-01],
+       [  1.00000000e+00,   2.00000000e+00,   1.00000000e+00,
+          1.00000000e+00,  -1.91649811e+00,   9.20746723e-01]])
+*/
+
+double b0[3] = {8.84603631e-07,   1.76920726e-06,   8.84603631e-07};
+double a0[3] = {1.00000000e+00,  -1.88914508e+00,   8.92476435e-01};
+double b1[3] = {1.        ,  2.        ,  1. };
+double a1[3] = {1.00000000e+00,  -1.91649811e+00,   9.20746723e-01};
 
 second_order_filter H0(b0, a0), H1(b1, a1);
 second_order_filter Vx_lowpass_0(b0, a0), Vx_lowpass_1(b1, a1);
@@ -354,7 +384,7 @@ void setup()
 {
     int i, value;
     float volts;
-    double altitude;
+    double altitude = 0.0f;
     
     //setup the MS5611 for correct i2c address
     // put pin 16 output, pulled high - CSB on ms5611, select 76 or 77
@@ -407,20 +437,28 @@ void setup()
 #endif //USE_STEPPER
 
 #ifdef TE_MS5611
-    ms5611_initial();
-    delay(1000);
-    pressure = ms5611_pressure();
-#else
-    bmp.getPressure(&pressure);
-    pressure /= 100.0F;
-#endif //TE_MS5611
-    
+		ms5611_initial();
+		delay(1000);
+#endif // TE_MS5611
 
-    //initialize filters
-	//TODO use some sort of averaging to set it - otherwise we have a mess.
-    altitude = bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+    //initialize filter
+	for (i = 1 ; i <= 100; i ++) {
+#ifdef TE_MS5611
+		pressure = ms5611_pressure();
+#else
+		bmp.getPressure(&pressure);
+		pressure /= 100.0F;
+#endif //TE_MS5611
+		// FIXME - check that the unit actually match; something fishy.
+		altitude += bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
+		delay(50);
+		Serial.println(altitude/ i);
+	}
+	altitude /= 100.0;
+	
     H0.fill(altitude);
     H1.fill(altitude);
+	// FIXME why the loop? it does nothing?
     for (i  =0 ; i <3 ; i++) {
         Serial.print(" H1");
         Serial.println(H1.current_value());
@@ -485,7 +523,8 @@ void loop()
 		since_last_copy = since_last;
 		grab_data = false;
 		interrupts();
-	
+		Serial.print("t=");
+		Serial.println(dt_global);
 #ifndef TE_MS5611
 		bmp.getPressure(&pressure);
         pressure /= 100.0F;
