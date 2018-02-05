@@ -20,6 +20,8 @@
 #define USE_STEPPER 1
 #define MAKE_NOISE 1
 
+#define N_INIT_AVE 20
+
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085_U.h>
@@ -199,9 +201,9 @@ float ms5611_pressure() {
 class second_order_filter {
 	public:
 		second_order_filter(double *b_v, double *a_v) : a(a_v), b(b_v){
-                    for (int i=0; i < 3; i++) {
-			x[i] = 0.0;
-			y[i] = 0.0;
+			for (int i=0; i < 3; i++) {
+				x[i] = 0.0;
+				y[i] = 0.0;
 		    }
 		}
 	private:
@@ -209,35 +211,50 @@ class second_order_filter {
                 double *a, *b;
 	public:
             
-                //fill x and y with a given value
-                void fill(double init_value) {
-                    for (int i=0; i < 3; i++) {
-			x[i] = init_value;
-		    }
-                }
-                
-                //advance the filter with a given input value
+		//fill x and y with a given value
+		void fill(double init_value) {
+			for (int i=0; i < 3; i++) {
+				x[i] = init_value;
+				y[i] = init_value;
+			}
+		}
+		
+		//advance the filter with a given input value
 		double step(double new_val) 
 		{
-		    int i;
-		    for (i=0; i< 2; i++) { 
-			x[i] = x[i+1];
-			y[i] = y[i+1];
+			int i;
+			for (i=0; i< 2; i++) { 
+				x[i] = x[i+1];
+				y[i] = y[i+1];
 		    }
 		    x[2] = new_val;
 		    y[2]  = 0.0;
 		    for (i=0; i< 3 ; i++) {
-			y[2] += b[i] * x[2 -i];
-                    }
-		    for (i=1; i < 3; i++) {
-			y[2] -= a[i] * y[2 -i];
-                    }
-                    return y[2];
+				y[2] += b[i] * x[2 -i];
+			}
+			for (i=1; i < 3; i++) {
+				y[2] -= a[i] * y[2 -i];
+			}
+			return y[2];
 		}
 		
 		double current_value() {
-                    return y[2];
-                }
+			return y[2];
+		}
+		
+		void print_values() {
+			Serial.print("X,");
+			for (int i = 0 ; i < 3; i++) {
+				Serial.print(x[i]) ; 
+				Serial.print(',');
+			}
+			Serial.print("Y,");
+			for (int i = 0 ; i < 3; i++) {
+				Serial.print(y[i]) ; 
+				Serial.print(',');
+			}
+			Serial.println();
+		}
 };
 
 /*
@@ -277,11 +294,11 @@ array([[  8.84603631e-07,   1.76920726e-06,   8.84603631e-07,
        [  1.00000000e+00,   2.00000000e+00,   1.00000000e+00,
           1.00000000e+00,  -1.91649811e+00,   9.20746723e-01]])
 */
-
-double b0[3] = {8.84603631e-07,   1.76920726e-06,   8.84603631e-07};
-double a0[3] = {1.00000000e+00,  -1.88914508e+00,   8.92476435e-01};
-double b1[3] = {1.        ,  2.        ,  1. };
-double a1[3] = {1.00000000e+00,  -1.91649811e+00,   9.20746723e-01};
+// try inverting the order - 
+double b1[3] = {8.84603631e-07,   1.76920726e-06,   8.84603631e-07};
+double a1[3] = {1.00000000e+00,  -1.88914508e+00,   8.92476435e-01};
+double b0[3] = {1.        ,  2.        ,  1. };
+double a0[3] = {1.00000000e+00,  -1.91649811e+00,   9.20746723e-01};
 
 second_order_filter H0(b0, a0), H1(b1, a1);
 second_order_filter Vx_lowpass_0(b0, a0), Vx_lowpass_1(b1, a1);
@@ -442,27 +459,26 @@ void setup()
 #endif // TE_MS5611
 
     //initialize filter
-	for (i = 1 ; i <= 100; i ++) {
+	for (i = 1 ; i <= N_INIT_AVE; i ++) {
 #ifdef TE_MS5611
 		pressure = ms5611_pressure();
 #else
 		bmp.getPressure(&pressure);
 		pressure /= 100.0F;
 #endif //TE_MS5611
-		// FIXME - check that the unit actually match; something fishy.
 		altitude += bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA, pressure);
 		delay(50);
 		Serial.println(altitude/ i);
 	}
-	altitude /= 100.0;
+	altitude /= N_INIT_AVE;
 	
     H0.fill(altitude);
     H1.fill(altitude);
-	// FIXME why the loop? it does nothing?
-    for (i  =0 ; i <3 ; i++) {
-        Serial.print(" H1");
-        Serial.println(H1.current_value());
-    }
+	Serial.println("H0 initial");
+	H0.print_values();
+	Serial.println("H1 initial");
+	H1.print_values();
+	
     Vx_lowpass_0.fill(TAS(altitude));
     Vx_lowpass_1.fill(TAS(altitude));
     
@@ -536,6 +552,10 @@ void loop()
 
         Serial.print(" altitude ");
         Serial.println(altitude);
+		
+		H0.print_values();
+		H1.print_values();
+		
         H0.step(altitude);
         old_filtered_altitude = H1.current_value();
         H1.step(H0.current_value());
